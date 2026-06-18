@@ -2,12 +2,12 @@
   <div class="space-y-5">
     <section class="liquid rounded-[28px] p-5 md:p-7">
       <h1 class="m-0 text-3xl">旅行工具箱</h1>
-      <p class="m-0 mt-2 text-[var(--muted)]">预算、路线、避坑、行李，一页解决出行前最具体的问题。</p>
+      <p class="m-0 mt-2 text-[var(--muted)]">把出发前最容易纠结的事交给我，预算、路线、避坑和行李都能一起想清楚。</p>
     </section>
 
     <n-tabs v-model:value="active" type="segment" animated>
       <n-tab-pane name="budget" tab="预算分析">
-        <ToolShell title="预算分析" desc="快速估算总预算、人均费用和各项占比。">
+        <ToolShell title="预算分析" desc="告诉我从哪出发、去哪、几个人，我帮你把大概要花的钱拆开算清楚。">
           <template #form>
             <Field label="出发地">
               <n-input v-model:value="budget.origin" placeholder="例如杭州" />
@@ -58,7 +58,7 @@
       </n-tab-pane>
 
       <n-tab-pane name="route" tab="路线对比">
-        <ToolShell title="路线对比" desc="生成省钱、舒适、高效三种方案，适合快速决策。">
+        <ToolShell title="路线对比" desc="不确定怎么走时，我会给你几种不同节奏的方案，方便你直接比较。">
           <template #form>
             <Field label="出发地">
               <n-input v-model:value="route.origin" placeholder="例如杭州" />
@@ -100,7 +100,7 @@
       </n-tab-pane>
 
       <n-tab-pane name="pitfall" tab="避坑助手">
-        <ToolShell title="避坑助手" desc="按目的地生成交通、住宿、美食、景点的风险提醒。">
+        <ToolShell title="避坑助手" desc="出发前先看看哪些地方容易踩坑，订票、住宿、吃饭和游玩都少走弯路。">
           <template #form>
             <Field label="目的地">
               <n-input v-model:value="pitfall.destination" placeholder="例如三亚" />
@@ -123,7 +123,7 @@
       </n-tab-pane>
 
       <n-tab-pane name="packing" tab="行李清单">
-        <ToolShell title="行李清单" desc="按季节、人群和玩法生成可勾选清单。">
+        <ToolShell title="行李清单" desc="告诉我去哪玩、玩几天、和谁去，我帮你列一份出门前能直接勾选的清单。">
           <template #form>
             <Field label="目的地">
               <n-input v-model:value="packing.destination" placeholder="例如哈尔滨" />

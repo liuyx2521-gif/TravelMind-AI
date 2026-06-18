@@ -164,7 +164,7 @@ function select(item: Attraction) {
 function goDetail(item: Attraction) {
   item.coverImage = realAttractionImage(item)
   saveOnlineAttraction(item)
-  router.push(`/attractions/online-${item.id}`)
+  router.push(`/app/attractions/online-${item.id}`)
 }
 
 function fallbackImage(e: Event, item: Attraction) {

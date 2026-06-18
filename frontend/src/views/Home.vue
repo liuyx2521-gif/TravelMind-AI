@@ -4,7 +4,7 @@
       <div class="flex flex-wrap items-center justify-between gap-3 border-b border-white/20 p-4 md:p-5">
         <div>
           <h1 class="m-0 text-2xl font-800 md:text-3xl">TravelMind AI</h1>
-          <p class="m-0 mt-1 text-sm text-[var(--muted)]">连续问答，保留上下文，像聊天一样规划旅行。</p>
+          <p class="m-0 mt-1 text-sm text-[var(--muted)]">你可以一直追问，我会记住前面的想法，陪你把行程聊清楚。</p>
         </div>
         <div class="flex gap-2">
           <n-button round :disabled="messages.length <= 1" @click="savePlan">保存行程</n-button>
@@ -57,7 +57,7 @@
         <div class="mb-3 flex items-start justify-between gap-3">
           <div>
             <h2 class="m-0 text-xl">预算示意</h2>
-            <p class="m-0 mt-1 text-xs text-[var(--muted)]">随当前方案实时调整</p>
+            <p class="m-0 mt-1 text-xs text-[var(--muted)]">选中哪个方案，这里就看哪个方案的花费。</p>
           </div>
           <div class="rounded-2xl bg-white/55 px-3 py-1 text-sm font-700 dark:bg-white/10">￥{{ activeBudget.total }}</div>
         </div>
@@ -97,7 +97,7 @@
         <h2 class="m-0 mb-3 text-xl">对话记忆</h2>
         <div class="space-y-3 text-sm text-[var(--muted)]">
           <p class="m-0">当前会话：{{ conversationId ? `#${conversationId}` : '新会话' }}</p>
-          <p class="m-0">追问时可以直接说“第二天轻松一点”“酒店预算降到500”，AI 会结合上下文回答。</p>
+          <p class="m-0">你不用重复前面的条件，直接说“第二天轻松一点”“酒店预算降到500”就行。</p>
         </div>
       </div>
     </aside>
@@ -107,9 +107,9 @@
     <div class="mb-4 flex items-end justify-between gap-4">
       <div>
         <h2 class="m-0 text-2xl">当前季节适合去</h2>
-        <p class="m-0 mt-2 text-sm text-[var(--muted)]">{{ seasonalTip }} 推荐来自高德实时 POI。</p>
+        <p class="m-0 mt-2 text-sm text-[var(--muted)]">{{ seasonalTip }} 我会优先给你找高德实时 POI 里的当季去处。</p>
       </div>
-      <router-link to="/attractions" class="text-sm text-[var(--button-text)]">查看全部</router-link>
+      <router-link to="/app/attractions" class="text-sm text-[var(--button-text)]">查看全部</router-link>
     </div>
     <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
       <article v-for="item in seasonal" :key="item.id" class="overflow-hidden rounded-[24px] bg-white/45 dark:bg-white/6" @click="goOnlineAttraction(item)">
@@ -149,10 +149,12 @@ import { fallbackPlaceImage } from '../imageFallback'
 import { saveOnlineAttraction } from '../onlineDetail'
 import { seasonalAttractionKeyword, seasonalAttractionQueries, seasonalAttractionTip } from '../seasonalTravel'
 import { useThemeStore } from '../stores/theme'
+import { useUserStore } from '../stores/user'
 
 const toast = useMessage()
 const router = useRouter()
 const theme = useThemeStore()
+const user = useUserStore()
 const message = ref('我在杭州，预算3000元，想去海边玩3天，喜欢美食和拍照')
 const loading = ref(false)
 const chartRef = ref<HTMLDivElement>()
@@ -162,13 +164,7 @@ const seasonalTip = seasonalAttractionTip()
 const conversationId = ref<number>()
 const socialVisible = ref(false)
 const showExamples = ref(true)
-const messages = ref<ChatMessage[]>([
-  {
-    id: crypto.randomUUID(),
-    role: 'assistant',
-    content: '你好，我是 TravelMind AI。告诉我出发地、预算、天数和偏好，我会帮你规划目的地、交通、酒店、美食和每日行程。',
-  },
-])
+const messages = ref<ChatMessage[]>(defaultMessages())
 const examples = [
   '上海去成都玩4天，预算4000，喜欢美食和夜景',
   '北京出发，想看雪景，玩5天，预算6000',
@@ -199,6 +195,7 @@ type BudgetPlan = {
 
 let budgetChart: echarts.ECharts | undefined
 let resizeObserver: ResizeObserver | undefined
+let restoringChat = false
 const selectedBudgetIndex = ref(0)
 const budgetPlans = ref<BudgetPlan[]>([fallbackBudgetPlan(3000, '默认方案')])
 const activeBudget = computed(() => budgetPlans.value[selectedBudgetIndex.value] || budgetPlans.value[0])
@@ -227,6 +224,10 @@ async function ask() {
 }
 
 async function savePlan() {
+  if (!localStorage.getItem('token')) {
+    toast.warning('登录后才可以保存行程')
+    return
+  }
   const content = messages.value.map(x => `${x.role === 'user' ? '我' : 'TravelMind'}：${x.content}`).join('\n\n')
   try {
     await http.post('/api/plans', {
@@ -237,8 +238,8 @@ async function savePlan() {
       content,
     })
     toast.success('已保存')
-  } catch {
-    toast.error('请先登录后保存')
+  } catch (e) {
+    toast.error((e as Error).message || '保存失败')
   }
 }
 
@@ -248,18 +249,15 @@ function fallbackImage(e: Event, item: Attraction) {
 
 function goOnlineAttraction(item: Attraction) {
   saveOnlineAttraction(item)
-  router.push(`/attractions/online-${item.id}`)
+  router.push(`/app/attractions/online-${item.id}`)
 }
 
 function newChat() {
   conversationId.value = undefined
   message.value = ''
-  messages.value = [{
-    id: crypto.randomUUID(),
-    role: 'assistant',
-    content: '新会话已开始。你可以直接告诉我出发地、预算、天数、偏好。',
-  }]
+  messages.value = defaultMessages('新会话已开始。你可以直接告诉我出发地、预算、天数、偏好。')
   setBudgetPlans([fallbackBudgetPlan(3000, '默认方案')])
+  saveChatCache()
 }
 
 async function scrollBottom() {
@@ -449,27 +447,17 @@ function renderBudgetChart() {
 }
 
 watch(messages, () => {
-  localStorage.setItem('travelmind-chat', JSON.stringify({ conversationId: conversationId.value, messages: messages.value }))
+  saveChatCache()
   scrollBottom()
 }, { deep: true })
 
 watch(conversationId, () => {
-  localStorage.setItem('travelmind-chat', JSON.stringify({ conversationId: conversationId.value, messages: messages.value }))
+  saveChatCache()
 })
 
 onMounted(async () => {
-  const cache = localStorage.getItem('travelmind-chat')
-  if (cache) {
-    try {
-      const data = JSON.parse(cache)
-      if (Array.isArray(data.messages) && data.messages.length) {
-        messages.value = data.messages
-        conversationId.value = data.conversationId
-        const latestAssistant = [...messages.value].reverse().find(item => item.role === 'assistant')?.content
-        if (latestAssistant) setBudgetPlans(parseBudgetPlans(latestAssistant))
-      }
-    } catch {}
-  }
+  if (user.token && !user.user) await user.fetchMe()
+  restoreChatCache()
   await scrollBottom()
   seasonal.value = await loadOnlineSeasonalAttractions()
   await nextTick()
@@ -480,6 +468,62 @@ onMounted(async () => {
     resizeObserver.observe(chartRef.value)
   }
 })
+
+watch(() => chatOwnerKey(), () => {
+  restoreChatCache()
+})
+
+function defaultMessages(content = '你好，我是 TravelMind AI。告诉我出发地、预算、天数和偏好，我会帮你规划目的地、交通、酒店、美食和每日行程。') {
+  return [{ id: crypto.randomUUID(), role: 'assistant' as const, content }]
+}
+
+function chatOwnerKey() {
+  if (!user.token) return ''
+  return user.user?.id ? `user-${user.user.id}` : `token-${jwtSubject(user.token)}`
+}
+
+function chatStorageKey() {
+  const owner = chatOwnerKey()
+  return owner ? `travelmind-chat-${owner}` : ''
+}
+
+function saveChatCache() {
+  if (restoringChat) return
+  const key = chatStorageKey()
+  if (!key) return
+  localStorage.setItem(key, JSON.stringify({ conversationId: conversationId.value, messages: messages.value }))
+}
+
+function restoreChatCache() {
+  restoringChat = true
+  const key = chatStorageKey()
+  const cache = key ? localStorage.getItem(key) : ''
+  if (cache) {
+    try {
+      const data = JSON.parse(cache)
+      if (Array.isArray(data.messages) && data.messages.length) {
+        messages.value = data.messages
+        conversationId.value = data.conversationId
+        const latestAssistant = [...messages.value].reverse().find(item => item.role === 'assistant')?.content
+        if (latestAssistant) setBudgetPlans(parseBudgetPlans(latestAssistant))
+        restoringChat = false
+        return
+      }
+    } catch {}
+  }
+  conversationId.value = undefined
+  messages.value = defaultMessages()
+  setBudgetPlans([fallbackBudgetPlan(3000, '默认方案')])
+  restoringChat = false
+}
+
+function jwtSubject(token: string) {
+  try {
+    return JSON.parse(atob(token.split('.')[1] || '')).sub || token.slice(-12)
+  } catch {
+    return token.slice(-12)
+  }
+}
 
 onBeforeUnmount(() => {
   window.removeEventListener('resize', resizeBudgetChart)

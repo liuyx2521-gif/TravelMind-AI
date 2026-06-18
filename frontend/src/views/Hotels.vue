@@ -109,7 +109,7 @@ async function searchOnlineByJs(): Promise<Hotel[]> {
 
 function goDetail(item: Hotel) {
   saveOnlineHotel(item)
-  router.push(`/hotels/online-${item.id}`)
+  router.push(`/app/hotels/online-${item.id}`)
 }
 
 function book(item: Hotel) {

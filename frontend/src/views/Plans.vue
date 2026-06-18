@@ -1,7 +1,7 @@
 <template>
   <div v-if="detailMode && current" class="space-y-5">
     <section class="liquid rounded-[28px] p-5">
-      <n-button quaternary class="mb-4" @click="router.push('/plans')">返回行程</n-button>
+      <n-button quaternary class="mb-4" @click="router.push('/app/plans')">返回行程</n-button>
       <div class="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 class="m-0 text-3xl">{{ current.title }}</h1>
@@ -62,12 +62,21 @@
     </n-modal>
   </div>
 
+  <div v-else-if="!loggedIn" class="liquid rounded-[28px] p-6 text-center">
+    <h1 class="m-0 text-2xl">登录后才可以使用行程功能</h1>
+    <p class="mx-auto mt-3 max-w-xl leading-7 text-[var(--muted)]">游客可以先和 AI 聊旅行方案，也可以浏览景点和酒店。登录后，我会帮你保存每一份行程，并在这里整理成可点击的卡片和流程图。</p>
+    <div class="mt-5 flex justify-center gap-3">
+      <n-button type="primary" round @click="router.push('/login?redirect=/app/plans')">去登录</n-button>
+      <n-button round @click="router.push('/register')">注册账号</n-button>
+    </div>
+  </div>
+
   <div v-else class="space-y-4">
     <article
       v-for="plan in plans"
       :key="plan.id"
       class="liquid cursor-pointer rounded-[28px] p-5 transition hover:-translate-y-1"
-      @click="router.push(`/plans/${plan.id}`)"
+      @click="router.push(`/app/plans/${plan.id}`)"
     >
       <div class="flex flex-wrap items-center justify-between gap-4">
         <div>
@@ -87,6 +96,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import * as echarts from 'echarts'
 import { http, type Plan } from '../api'
+import { useUserStore } from '../stores/user'
 
 type FlowType = 'transport' | 'attraction' | 'food' | 'hotel'
 type FlowNode = {
@@ -102,6 +112,7 @@ type DayPlan = { title: string; text: string; nodes: FlowNode[] }
 
 const route = useRoute()
 const router = useRouter()
+const user = useUserStore()
 const plans = ref<Plan[]>([])
 const current = ref<Plan>()
 const chartRef = ref<HTMLDivElement>()
@@ -109,11 +120,13 @@ const nodeVisible = ref(false)
 const selectedNode = ref<FlowNode>()
 const selectedDay = ref<DayPlan>()
 const detailMode = computed(() => !!route.params.id)
+const loggedIn = computed(() => !!user.token)
 const structuredDays = computed(() => parsePlanDays(current.value))
 const selectedNodeTitle = computed(() => selectedDay.value && selectedNode.value ? `${selectedDay.value.title} · ${selectedNode.value.label}` : '详情')
 let chart: echarts.ECharts | undefined
 
 async function load() {
+  if (!user.token) return
   if (detailMode.value) {
     current.value = await http.get<Plan>(`/api/plans/${route.params.id}`)
     await nextTick()

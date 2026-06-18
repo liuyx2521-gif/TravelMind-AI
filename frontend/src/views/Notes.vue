@@ -4,8 +4,8 @@
       <img :src="coverOf(current)" class="h-[360px] w-full object-cover" @error="fallbackNoteImage($event, current)" />
       <div class="p-5 md:p-7">
         <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <n-button quaternary @click="router.push('/notes')">返回游记</n-button>
-          <n-popconfirm @positive-click="deleteNote(current)">
+          <n-button quaternary @click="router.push('/app/notes')">返回游记</n-button>
+          <n-popconfirm v-if="isMine(current)" @positive-click="deleteNote(current)">
             <template #trigger>
               <n-button round type="error" ghost :loading="deletingId === current.id">删除</n-button>
             </template>
@@ -48,45 +48,64 @@
     </section>
   </div>
 
-  <div v-else class="grid gap-5 lg:grid-cols-[1fr_360px]">
-    <section class="grid gap-4">
+  <div v-else class="space-y-5">
+    <section class="liquid rounded-[28px] p-5 md:p-6">
+      <div class="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h1 class="m-0 text-3xl">旅行社区</h1>
+          <p class="m-0 mt-2 text-[var(--muted)]">看看大家真实分享的路线、照片和避坑经验，也可以发布自己的旅行灵感。</p>
+        </div>
+        <div class="flex w-full gap-2 md:w-[420px]">
+          <n-input v-model:value="keyword" round clearable placeholder="搜索目的地、玩法、美食..." @keyup.enter="loadList" />
+          <n-button type="primary" round @click="loadList">搜索</n-button>
+        </div>
+      </div>
+    </section>
+
+    <section class="liquid rounded-[28px] p-5">
+      <h2 class="m-0 mb-4">发布游记</h2>
+      <div class="grid gap-4 lg:grid-cols-[1fr_1.15fr]">
+        <div>
+          <n-input v-model:value="form.title" class="mb-3" placeholder="标题，例如：三亚三天两晚，海边和夜市都安排上了" />
+          <n-input v-model:value="form.content" type="textarea" :autosize="{ minRows: 5 }" placeholder="写下你的旅行体验、路线、预算、避坑或者推荐理由" />
+          <n-button class="mt-4" type="primary" round :loading="publishing" @click="publish">发布到社区</n-button>
+        </div>
+        <div>
+          <n-upload multiple list-type="image-card" :custom-request="uploadPhoto" />
+          <div v-if="form.images.length" class="mt-2 text-sm text-[var(--muted)]">已上传 {{ form.images.length }} 张照片</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="columns-1 gap-4 md:columns-2">
       <article
         v-for="note in notes"
         :key="note.id"
-        class="liquid cursor-pointer overflow-hidden rounded-[28px] transition hover:-translate-y-1"
-        @click="router.push(`/notes/${note.id}`)"
+        class="liquid mb-4 inline-block w-full cursor-pointer overflow-hidden rounded-[28px] transition hover:-translate-y-1"
+        @click="router.push(`/app/notes/${note.id}`)"
       >
-        <img :src="coverOf(note)" class="h-56 w-full object-cover" @error="fallbackNoteImage($event, note)" />
+        <img :src="coverOf(note)" class="max-h-[420px] min-h-[220px] w-full object-cover" @error="fallbackNoteImage($event, note)" />
         <div class="p-5">
-          <h2 class="m-0 text-2xl">{{ note.title }}</h2>
+          <h2 class="m-0 text-xl">{{ note.title }}</h2>
           <p class="line-clamp-3 whitespace-pre-wrap text-[var(--muted)]">{{ note.content }}</p>
-          <div class="mt-4 flex flex-wrap gap-3" @click.stop>
-            <n-button round @click="like(note)">点赞 {{ note.likeCount }}</n-button>
-            <n-button round @click="router.push(`/notes/${note.id}`)">查看评论</n-button>
-            <n-popconfirm @positive-click="deleteNote(note)">
+          <div class="mt-4 flex flex-wrap items-center justify-between gap-3 text-sm text-[var(--muted)]" @click.stop>
+            <span>用户 #{{ note.userId || '-' }}</span>
+            <span>{{ note.viewCount || 0 }} 浏览 · {{ note.likeCount || 0 }} 赞</span>
+          </div>
+          <div class="mt-3 flex flex-wrap gap-2" @click.stop>
+            <n-button size="small" round @click="like(note)">点赞</n-button>
+            <n-button size="small" round @click="router.push(`/app/notes/${note.id}`)">评论</n-button>
+            <n-popconfirm v-if="isMine(note)" @positive-click="deleteNote(note)">
               <template #trigger>
-                <n-button round type="error" ghost :loading="deletingId === note.id">删除</n-button>
+                <n-button size="small" round type="error" ghost :loading="deletingId === note.id">删除</n-button>
               </template>
               确定删除这篇游记吗？
             </n-popconfirm>
           </div>
         </div>
       </article>
+      <n-empty v-if="!notes.length" description="没有找到相关游记" />
     </section>
-
-    <aside class="liquid h-fit rounded-[28px] p-5">
-      <h2 class="m-0 mb-4">发布游记</h2>
-      <n-input v-model:value="form.title" class="mb-3" placeholder="标题" />
-      <n-upload
-        multiple
-        list-type="image-card"
-        :custom-request="uploadPhoto"
-        class="mb-3"
-      />
-      <div v-if="form.images.length" class="mb-3 text-sm text-[var(--muted)]">已上传 {{ form.images.length }} 张照片</div>
-      <n-input v-model:value="form.content" type="textarea" :autosize="{ minRows: 5 }" placeholder="写下你的旅行体验" />
-      <n-button class="mt-4" type="primary" round block :loading="publishing" @click="publish">发布</n-button>
-    </aside>
   </div>
 </template>
 
@@ -96,6 +115,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useMessage } from 'naive-ui'
 import { http, type Comment, type Note, type PageResp } from '../api'
 import { fallbackGenericImage, placeImagePlaceholder } from '../imageFallback'
+import { useUserStore } from '../stores/user'
 
 type UploadResp = { url: string }
 type NoteWithImages = Note & { images?: string }
@@ -103,6 +123,7 @@ type NoteWithImages = Note & { images?: string }
 const toast = useMessage()
 const route = useRoute()
 const router = useRouter()
+const user = useUserStore()
 const notes = ref<NoteWithImages[]>([])
 const comments = ref<Comment[]>([])
 const current = ref<NoteWithImages>()
@@ -112,6 +133,7 @@ const publishing = ref(false)
 const deletingId = ref<number>()
 const form = reactive({ title: '', content: '', images: [] as string[] })
 const detailMode = computed(() => !!route.params.id)
+const keyword = ref('')
 
 function notePlaceholder(title: string) {
   return placeImagePlaceholder({ title })
@@ -136,7 +158,9 @@ function coverOf(note: NoteWithImages) {
 }
 
 async function loadList() {
-  const page = await http.get<PageResp<NoteWithImages>>('/api/notes')
+  const page = await http.get<PageResp<NoteWithImages>>('/api/notes', {
+    params: { keyword: keyword.value.trim() || undefined, size: 30 },
+  })
   notes.value = page.records
 }
 
@@ -153,6 +177,11 @@ async function loadDetail() {
 }
 
 async function uploadPhoto({ file, onFinish, onError }: any) {
+  if (!user.token) {
+    onError()
+    toast.warning('登录后才可以上传照片')
+    return
+  }
   const body = new FormData()
   body.append('file', file.file)
   try {
@@ -166,6 +195,10 @@ async function uploadPhoto({ file, onFinish, onError }: any) {
 }
 
 async function publish() {
+  if (!user.token) {
+    toast.warning('登录后才可以发布游记')
+    return
+  }
   if (!form.title.trim() || !form.content.trim()) {
     toast.warning('标题和内容不能为空')
     return
@@ -191,11 +224,23 @@ async function publish() {
 }
 
 async function like(note: NoteWithImages) {
+  if (!user.token) {
+    toast.warning('登录后才可以点赞')
+    return
+  }
   await http.post(`/api/notes/${note.id}/like`)
   note.likeCount = (note.likeCount || 0) + 1
 }
 
+function isMine(note: NoteWithImages) {
+  return !!user.user?.id && Number(note.userId) === Number(user.user.id)
+}
+
 async function deleteNote(note: NoteWithImages) {
+  if (!user.token) {
+    toast.warning('登录后才可以删除游记')
+    return
+  }
   deletingId.value = note.id
   try {
     await http.post(`/api/notes/${note.id}/delete`)
@@ -203,7 +248,7 @@ async function deleteNote(note: NoteWithImages) {
     toast.success('已删除')
     if (current.value?.id === note.id) {
       current.value = undefined
-      await router.push('/notes')
+      await router.push('/app/notes')
       await loadList()
     }
   } catch (e) {
@@ -214,6 +259,10 @@ async function deleteNote(note: NoteWithImages) {
 }
 
 async function sendComment() {
+  if (!user.token) {
+    toast.warning('登录后才可以评论')
+    return
+  }
   if (!current.value || !comment.value.trim()) {
     toast.warning('评论不能为空')
     return
@@ -231,5 +280,8 @@ async function sendComment() {
 }
 
 watch(() => route.params.id, loadDetail)
-onMounted(loadDetail)
+onMounted(async () => {
+  if (user.token && !user.user) await user.fetchMe()
+  await loadDetail()
+})
 </script>

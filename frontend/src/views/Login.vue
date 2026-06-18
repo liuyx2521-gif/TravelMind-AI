@@ -34,7 +34,7 @@ async function login() {
   loading.value = true
   try {
     await user.login(account.value, password.value)
-    router.push(String(route.query.redirect || '/'))
+    router.push(String(route.query.redirect || '/app'))
   } catch (e) {
     toast.error((e as Error).message)
   } finally {

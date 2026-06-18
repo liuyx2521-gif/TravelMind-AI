@@ -106,7 +106,7 @@ async function loadFavoriteState() {
 async function toggleFavorite() {
   if (!item.value) return
   if (!localStorage.getItem('token')) {
-    toast.warning('请先登录后收藏')
+    toast.warning('登录后才可以收藏酒店')
     return
   }
   try {
@@ -128,7 +128,7 @@ async function toggleFavorite() {
 }
 
 function cardPayload() {
-  const path = String(route.params.id).startsWith('online-') ? `/hotels/online-${item.value!.id}` : `/hotels/${item.value!.id}`
+  const path = String(route.params.id).startsWith('online-') ? `/app/hotels/online-${item.value!.id}` : `/app/hotels/${item.value!.id}`
   return {
     targetId: item.value!.id,
     targetType: 'HOTEL',

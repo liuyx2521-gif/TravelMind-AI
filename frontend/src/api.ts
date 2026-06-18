@@ -45,5 +45,5 @@ export type Attraction = {
 }
 export type Hotel = { id: number; name: string; city: string; address: string; price: number; score: number; cover: string; longitude: number; latitude: number; source?: 'local' | 'online' }
 export type Plan = { id: number; title: string; destination: string; budget: number; days: number; season?: string; content?: string }
-export type Note = { id: number; title: string; content: string; cover: string; viewCount: number; likeCount: number }
+export type Note = { id: number; userId?: number; title: string; content: string; cover: string; viewCount: number; likeCount: number; createTime?: string }
 export type Comment = { id: number; noteId: number; content: string; createTime: string }

@@ -25,9 +25,24 @@ public class NoteController {
 
     @GetMapping
     public Result<PageResp<TravelNote>> page(@RequestParam(defaultValue = "1") long page,
-                                             @RequestParam(defaultValue = "10") long size) {
+                                             @RequestParam(defaultValue = "20") long size,
+                                             @RequestParam(required = false) String keyword) {
         return Result.ok(PageResp.of(mapper.selectPage(Page.of(page, size),
-                lambdaQuery(TravelNote.class).orderByDesc(TravelNote::getLikeCount, TravelNote::getCreateTime))));
+                lambdaQuery(TravelNote.class)
+                        .and(keyword != null && !keyword.isBlank(), q -> q
+                                .like(TravelNote::getTitle, keyword)
+                                .or()
+                                .like(TravelNote::getContent, keyword))
+                        .orderByDesc(TravelNote::getCreateTime))));
+    }
+
+    @GetMapping("/mine")
+    public Result<PageResp<TravelNote>> mine(@RequestParam(defaultValue = "1") long page,
+                                             @RequestParam(defaultValue = "20") long size) {
+        return Result.ok(PageResp.of(mapper.selectPage(Page.of(page, size),
+                lambdaQuery(TravelNote.class)
+                        .eq(TravelNote::getUserId, LoginUser.id())
+                        .orderByDesc(TravelNote::getCreateTime))));
     }
 
     @GetMapping("/{id}")

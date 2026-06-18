@@ -1,7 +1,7 @@
 <template>
   <div class="min-h-screen px-4 py-5 md:px-8">
     <header class="mx-auto mb-6 flex max-w-6xl items-center justify-between">
-      <router-link to="/" class="text-2xl font-700 tracking-tight">TravelMind AI</router-link>
+      <router-link to="/app" class="text-2xl font-700 tracking-tight">TravelMind AI</router-link>
       <nav class="liquid flex items-center gap-1 rounded-3xl p-1">
         <router-link
           v-for="item in items"
@@ -32,16 +32,16 @@ const route = useRoute()
 document.documentElement.classList.toggle('dark', theme.dark)
 
 const items = [
-  { name: 'AI规划', path: '/' },
-  { name: '景点', path: '/attractions' },
-  { name: '酒店', path: '/hotels' },
-  { name: '游记', path: '/notes' },
-  { name: 'AI工具', path: '/tools' },
-  { name: '行程', path: '/plans' },
-  { name: '我的', path: '/profile' },
+  { name: 'AI规划', path: '/app' },
+  { name: '景点', path: '/app/attractions' },
+  { name: '酒店', path: '/app/hotels' },
+  { name: '游记', path: '/app/notes' },
+  { name: 'AI工具', path: '/app/tools' },
+  { name: '行程', path: '/app/plans' },
+  { name: '我的', path: '/app/profile' },
 ]
 
 function isActive(path: string) {
-  return path === '/' ? route.path === '/' : route.path === path || route.path.startsWith(`${path}/`)
+  return path === '/app' ? route.path === '/app' : route.path === path || route.path.startsWith(`${path}/`)
 }
 </script>

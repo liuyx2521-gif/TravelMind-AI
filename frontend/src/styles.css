@@ -85,3 +85,181 @@ body {
   background: rgba(140, 151, 166, .08);
   box-shadow: none;
 }
+
+.landing-shell {
+  position: relative;
+  min-height: 100vh;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  padding: 28px;
+  background:
+    radial-gradient(ellipse at center, rgba(255, 255, 255, .98) 0%, rgba(255, 255, 255, .92) 28%, rgba(244, 247, 251, .7) 58%, rgba(232, 237, 242, .82) 100%),
+    radial-gradient(circle at 15% 20%, rgba(120, 160, 190, .18), transparent 26%),
+    radial-gradient(circle at 84% 78%, rgba(126, 173, 145, .18), transparent 28%),
+    var(--bg);
+}
+
+.dark .landing-shell {
+  background:
+    radial-gradient(ellipse at center, rgba(18, 22, 30, .95) 0%, rgba(14, 18, 25, .86) 30%, rgba(10, 13, 19, .78) 62%, rgba(7, 9, 13, .9) 100%),
+    radial-gradient(circle at 18% 18%, rgba(82, 119, 156, .3), transparent 30%),
+    radial-gradient(circle at 82% 80%, rgba(77, 128, 103, .22), transparent 28%),
+    var(--bg);
+}
+
+.landing-shell::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse at center, rgba(255, 255, 255, .92) 0%, rgba(255, 255, 255, .76) 23%, rgba(255, 255, 255, .28) 43%, transparent 68%),
+    linear-gradient(180deg, transparent 0%, rgba(244, 247, 251, .32) 100%);
+}
+
+.dark .landing-shell::after {
+  background:
+    radial-gradient(ellipse at center, rgba(10, 13, 20, .72) 0%, rgba(10, 13, 20, .54) 24%, rgba(10, 13, 20, .18) 48%, transparent 70%),
+    linear-gradient(180deg, transparent 0%, rgba(0, 0, 0, .22) 100%);
+}
+
+.landing-glow {
+  position: absolute;
+  width: 420px;
+  height: 420px;
+  border-radius: 999px;
+  filter: blur(60px);
+  opacity: .42;
+  pointer-events: none;
+}
+
+.landing-glow-a {
+  left: -110px;
+  top: 4%;
+  background: rgba(121, 144, 169, .55);
+}
+
+.landing-glow-b {
+  right: -120px;
+  bottom: 4%;
+  background: rgba(126, 174, 151, .48);
+}
+
+.landing-hero {
+  position: relative;
+  z-index: 3;
+  max-width: 720px;
+  text-align: center;
+  padding: 24px;
+}
+
+.landing-pill {
+  display: inline-flex;
+  border: 1px solid rgba(255, 255, 255, .56);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .62);
+  padding: 9px 15px;
+  color: var(--muted);
+  font-size: 13px;
+  backdrop-filter: blur(20px);
+}
+
+.dark .landing-pill {
+  border-color: rgba(255, 255, 255, .12);
+  background: rgba(255, 255, 255, .08);
+}
+
+.landing-hero h1 {
+  margin: 0;
+  font-size: clamp(56px, 8vw, 118px);
+  line-height: .92;
+  letter-spacing: 0;
+}
+
+.landing-hero p {
+  max-width: 620px;
+  margin: 24px auto 0;
+  color: var(--muted);
+  font-size: clamp(16px, 2vw, 20px);
+  line-height: 1.8;
+}
+
+.landing-actions {
+  margin-top: 30px;
+  display: flex;
+  justify-content: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.landing-photo {
+  position: absolute;
+  z-index: 1;
+  left: calc(50% + var(--x));
+  top: calc(50% + var(--y));
+  width: var(--size);
+  aspect-ratio: 1.35;
+  border: 1px solid rgba(255, 255, 255, .62);
+  border-radius: 28px;
+  padding: 0;
+  overflow: hidden;
+  cursor: zoom-in;
+  background: rgba(255, 255, 255, .5);
+  box-shadow: 0 24px 46px rgba(31, 45, 66, .14);
+  opacity: var(--photo-opacity, .55);
+  filter: blur(var(--photo-blur, 0));
+  transform: translate(-50%, -50%) rotate(var(--rotate, -6deg));
+  transition: transform .35s ease, opacity .35s ease, box-shadow .35s ease;
+  animation: landingFloat 8s ease-in-out infinite;
+  backdrop-filter: blur(18px);
+}
+
+.landing-photo:hover,
+.landing-photo:focus-visible {
+  z-index: 4;
+  opacity: 1;
+  filter: blur(0);
+  outline: none;
+  transform: translate(-50%, -50%) translateY(-8px) scale(1.12) rotate(0deg);
+  box-shadow: 0 28px 70px rgba(31, 45, 66, .28);
+}
+
+.landing-photo img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+}
+
+@keyframes landingFloat {
+  0%, 100% { translate: 0 0; }
+  50% { translate: 0 -14px; }
+}
+
+@media (max-width: 900px) {
+  .landing-shell {
+    min-height: 100dvh;
+    padding: 18px;
+    align-content: center;
+  }
+
+  .landing-hero {
+    padding: 14px;
+  }
+
+  .landing-hero h1 {
+    font-size: clamp(46px, 16vw, 72px);
+  }
+
+  .landing-photo {
+    width: 86px;
+    border-radius: 22px;
+    opacity: .42;
+  }
+
+  .landing-photo:nth-of-type(n + 13) {
+    display: none;
+  }
+}

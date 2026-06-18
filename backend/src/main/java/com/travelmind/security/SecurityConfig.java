@@ -36,6 +36,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(x -> x
                         .requestMatchers("/api/auth/**", "/doc.html", "/webjars/**", "/v3/api-docs/**").permitAll()
                         .requestMatchers("/api/files/**", "/api/favorites/**", "/api/plans/**", "/api/history/**").authenticated()
+                        .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/notes/mine").authenticated()
                         .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/notes/**").authenticated()
                         .requestMatchers(org.springframework.http.HttpMethod.DELETE, "/api/notes/**").authenticated()
                         .anyRequest().permitAll())

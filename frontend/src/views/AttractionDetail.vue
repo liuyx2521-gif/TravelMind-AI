@@ -108,7 +108,7 @@ async function loadOnlineHotels(city?: string) {
 
 function goHotelDetail(hotel: Hotel) {
   saveOnlineHotel(hotel)
-  router.push(`/hotels/online-${hotel.id}`)
+  router.push(`/app/hotels/online-${hotel.id}`)
 }
 
 function book(hotel: Hotel) {
@@ -134,7 +134,7 @@ async function loadFavoriteState() {
 async function toggleFavorite() {
   if (!item.value) return
   if (!localStorage.getItem('token')) {
-    toast.warning('请先登录后收藏')
+    toast.warning('登录后才可以收藏景点')
     return
   }
   try {
@@ -156,7 +156,7 @@ async function toggleFavorite() {
 }
 
 function cardPayload() {
-  const path = String(route.params.id).startsWith('online-') ? `/attractions/online-${item.value!.id}` : `/attractions/${item.value!.id}`
+  const path = String(route.params.id).startsWith('online-') ? `/app/attractions/online-${item.value!.id}` : `/app/attractions/${item.value!.id}`
   return {
     targetId: item.value!.id,
     targetType: 'ATTRACTION',
