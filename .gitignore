@@ -1,0 +1,31 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+target/
+frontend/dist/
+backend/target/
+
+# Runtime uploads and temp files
+uploads/
+backend/uploads/
+*.log
+*.err
+hs_err_pid*.log
+*.class
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+
+# IDE and OS files
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Package manager cache
+.npm/
+.pnpm-store/

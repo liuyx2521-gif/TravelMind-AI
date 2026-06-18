@@ -1,0 +1,87 @@
+:root {
+  color-scheme: light;
+  --bg: #f4f7fb;
+  --text: #101828;
+  --muted: #667085;
+  --primary: #5f7387;
+  --button-bg: rgba(255, 255, 255, .72);
+  --button-bg-hover: rgba(231, 237, 244, .96);
+  --button-border: rgba(38, 52, 69, .22);
+  --button-border-hover: rgba(38, 52, 69, .42);
+  --button-text: #263445;
+  --button-primary-bg: rgba(95, 115, 135, .92);
+  --button-primary-bg-hover: rgba(70, 88, 106, .98);
+  --button-primary-shadow: rgba(45, 58, 72, .18);
+}
+
+.dark {
+  color-scheme: dark;
+  --bg: #0b0d12;
+  --text: #f8fafc;
+  --muted: #98a2b3;
+  --button-bg: rgba(255, 255, 255, .1);
+  --button-bg-hover: rgba(255, 255, 255, .16);
+  --button-border: rgba(232, 238, 248, .24);
+  --button-border-hover: rgba(232, 238, 248, .42);
+  --button-text: #e8eef8;
+  --button-primary-bg: rgba(126, 144, 163, .7);
+  --button-primary-bg-hover: rgba(151, 166, 184, .82);
+  --button-primary-shadow: rgba(0, 0, 0, .26);
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  color: var(--text);
+  background:
+    radial-gradient(circle at 20% 0%, rgba(0, 122, 255, .16), transparent 28%),
+    radial-gradient(circle at 80% 10%, rgba(52, 199, 89, .14), transparent 24%),
+    var(--bg);
+  font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.liquid {
+  border: 1px solid rgba(255, 255, 255, .55);
+  background: rgba(255, 255, 255, .62);
+  box-shadow: 0 20px 60px rgba(20, 35, 70, .14);
+  backdrop-filter: blur(28px) saturate(180%);
+}
+
+.dark .liquid {
+  border-color: rgba(255, 255, 255, .12);
+  background: rgba(28, 32, 42, .58);
+  box-shadow: 0 22px 58px rgba(0, 0, 0, .38);
+}
+
+.n-button:not(.n-button--primary-type) {
+  color: var(--button-text);
+  border-color: var(--button-border);
+  background: var(--button-bg);
+}
+
+.n-button:not(.n-button--primary-type):hover {
+  color: var(--text);
+  border-color: var(--button-border-hover);
+  background: var(--button-bg-hover);
+}
+
+.n-button.n-button--primary-type {
+  color: #ffffff;
+  background: var(--button-primary-bg);
+  border-color: rgba(255, 255, 255, .28);
+  box-shadow: 0 10px 28px var(--button-primary-shadow);
+}
+
+.n-button.n-button--primary-type:hover {
+  color: #ffffff;
+  background: var(--button-primary-bg-hover);
+  border-color: rgba(255, 255, 255, .42);
+}
+
+.n-button.n-button--disabled,
+.n-button.n-button--disabled:hover {
+  color: rgba(140, 151, 166, .58);
+  border-color: rgba(140, 151, 166, .16);
+  background: rgba(140, 151, 166, .08);
+  box-shadow: none;
+}
