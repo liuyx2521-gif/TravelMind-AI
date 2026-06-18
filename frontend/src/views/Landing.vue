@@ -278,9 +278,15 @@ function openPlace(place: HeroPlace) {
 
 function photoStyle(index: number) {
   const rings = [
+<<<<<<< HEAD
     { count: 8, rx: 33, ry: 27, size: '96px', offset: -90, opacity: .1, blur: '3px', z: 1 },
     { count: 8, rx: 43, ry: 36, size: '108px', offset: -67.5, opacity: .32, blur: '1.2px', z: 1 },
     { count: 12, rx: 53, ry: 45, size: '124px', offset: -90, opacity: .72, blur: '0px', z: 2 },
+=======
+    { count: 8, rx: 27, ry: 22, size: '112px', offset: -92, opacity: .12, blur: '2.6px' },
+    { count: 10, rx: 39, ry: 34, size: '112px', offset: -74, opacity: .3, blur: '1.4px' },
+    { count: 10, rx: 52, ry: 47, size: '120px', offset: -56, opacity: .68, blur: '0px' },
+>>>>>>> origin/main
   ]
   let cursor = 0
   let ring = rings[0]
@@ -301,9 +307,14 @@ function photoStyle(index: number) {
     '--size': ring.size,
     '--photo-opacity': String(ring.opacity),
     '--photo-blur': ring.blur,
+<<<<<<< HEAD
     '--photo-z': String(ring.z),
     '--rotate': `${rotate.toFixed(1)}deg`,
     animationDelay: `${-(index % 8) * 0.42}s`,
+=======
+    '--rotate': `${rotate.toFixed(1)}deg`,
+    animationDelay: `${-(index % 9) * 0.55}s`,
+>>>>>>> origin/main
   } as Record<string, string>
 }
 
