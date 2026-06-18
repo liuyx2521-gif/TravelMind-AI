@@ -115,13 +115,13 @@ body {
   z-index: 1;
   pointer-events: none;
   background:
-    radial-gradient(ellipse at center, rgba(255, 255, 255, .92) 0%, rgba(255, 255, 255, .76) 23%, rgba(255, 255, 255, .28) 43%, transparent 68%),
+    radial-gradient(ellipse at center, rgba(255, 255, 255, .96) 0%, rgba(255, 255, 255, .82) 28%, rgba(255, 255, 255, .34) 49%, transparent 72%),
     linear-gradient(180deg, transparent 0%, rgba(244, 247, 251, .32) 100%);
 }
 
 .dark .landing-shell::after {
   background:
-    radial-gradient(ellipse at center, rgba(10, 13, 20, .72) 0%, rgba(10, 13, 20, .54) 24%, rgba(10, 13, 20, .18) 48%, transparent 70%),
+    radial-gradient(ellipse at center, rgba(10, 13, 20, .78) 0%, rgba(10, 13, 20, .58) 29%, rgba(10, 13, 20, .2) 50%, transparent 72%),
     linear-gradient(180deg, transparent 0%, rgba(0, 0, 0, .22) 100%);
 }
 
@@ -196,23 +196,23 @@ body {
 
 .landing-photo {
   position: absolute;
-  z-index: 1;
+  z-index: var(--photo-z, 1);
   left: calc(50% + var(--x));
   top: calc(50% + var(--y));
   width: var(--size);
   aspect-ratio: 1.35;
   border: 1px solid rgba(255, 255, 255, .62);
-  border-radius: 28px;
+  border-radius: 26px;
   padding: 0;
   overflow: hidden;
   cursor: zoom-in;
   background: rgba(255, 255, 255, .5);
-  box-shadow: 0 24px 46px rgba(31, 45, 66, .14);
+  box-shadow: 0 22px 44px rgba(31, 45, 66, .13);
   opacity: var(--photo-opacity, .55);
   filter: blur(var(--photo-blur, 0));
   transform: translate(-50%, -50%) rotate(var(--rotate, -6deg));
   transition: transform .35s ease, opacity .35s ease, box-shadow .35s ease;
-  animation: landingFloat 8s ease-in-out infinite;
+  animation: landingFloat 10s ease-in-out infinite;
   backdrop-filter: blur(18px);
 }
 
@@ -222,7 +222,7 @@ body {
   opacity: 1;
   filter: blur(0);
   outline: none;
-  transform: translate(-50%, -50%) translateY(-8px) scale(1.12) rotate(0deg);
+  transform: translate(-50%, -50%) translateY(-7px) scale(1.1) rotate(0deg);
   box-shadow: 0 28px 70px rgba(31, 45, 66, .28);
 }
 
@@ -235,7 +235,7 @@ body {
 
 @keyframes landingFloat {
   0%, 100% { translate: 0 0; }
-  50% { translate: 0 -14px; }
+  50% { translate: 0 -8px; }
 }
 
 @media (max-width: 900px) {
