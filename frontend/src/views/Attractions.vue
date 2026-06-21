@@ -51,6 +51,7 @@ import { useMessage } from 'naive-ui'
 import AMapLoader from '@amap/amap-jsapi-loader'
 import AmapView from '../components/AmapView.vue'
 import { http, type Attraction } from '../api'
+import { poiLatitude, poiLongitude, poiPhoto, stablePoiId, staticMap, type AmapPoi } from '../amapPoi'
 import { realAttractionImage } from '../realAttractionImages'
 import { fallbackPlaceImage, placeImagePlaceholder } from '../imageFallback'
 import { saveOnlineAttraction } from '../onlineDetail'
@@ -62,7 +63,7 @@ const list = ref<Attraction[]>([])
 const selected = ref<Attraction>()
 const mapVisible = ref(false)
 const onlineLoading = ref(false)
-const modeTip = ref(`${seasonalAttractionTip()} 数据来自高德实时联网 POI。`)
+const modeTip = ref(seasonalAttractionTip())
 const toast = useMessage()
 const router = useRouter()
 
@@ -107,10 +108,8 @@ async function searchSeasonalRecommendations() {
 }
 
 async function searchOnlineByBackend(): Promise<Attraction[]> {
-  const key = import.meta.env.VITE_AMAP_KEY
-  if (!key) throw new Error('缺少 VITE_AMAP_KEY')
   const results = await http.get<Attraction[]>('/api/attractions/online', {
-    params: { keyword: keyword.value || seasonalAttractionKeyword(), city: city.value, key, limit: 24 },
+    params: { keyword: keyword.value || seasonalAttractionKeyword(), city: city.value, limit: 24 },
   })
   return results.map(item => ({ ...item, source: 'online' }))
 }
@@ -128,14 +127,14 @@ async function searchOnlineByJs(searchKeyword = keyword.value || seasonalAttract
     pageSize,
     pageIndex: 1,
   })
-  const result = await new Promise<any[]>((resolve, reject) => {
+  const result = await new Promise<AmapPoi[]>((resolve, reject) => {
     placeSearch.search(searchKeyword, (status: string, res: any) => {
       if (status === 'complete' && res?.poiList?.pois) resolve(res.poiList.pois)
       else reject(new Error(res?.info || '高德在线搜索失败'))
     })
   })
   return result.map((poi, index) => ({
-    id: stablePoiId(poi, index, 'attraction'),
+    id: stablePoiId(poi, index, 'attraction', searchCity || city.value),
     name: poi.name,
     city: poi.cityname || searchCity || '',
     province: poi.pname || '',
@@ -170,49 +169,6 @@ function goDetail(item: Attraction) {
 function fallbackImage(e: Event, item: Attraction) {
   item.coverImage = placeImagePlaceholder(item)
   fallbackPlaceImage(e, item)
-}
-
-function poiPhoto(poi: any) {
-  const photos = Array.isArray(poi.photos) ? poi.photos : []
-  return photos.map((x: any) => x?.url || x).find((x: string) => typeof x === 'string' && x.startsWith('http')) || ''
-}
-
-function staticMap(location: any, key: string) {
-  const text = poiLocationText(location)
-  return text ? `https://restapi.amap.com/v3/staticmap?location=${text}&zoom=13&size=600*320&markers=mid,,A:${text}&key=${key}` : ''
-}
-
-function poiLocationText(location: any) {
-  const longitude = poiLongitude(location)
-  const latitude = poiLatitude(location)
-  return longitude && latitude ? `${longitude},${latitude}` : ''
-}
-
-function poiLongitude(location: any) {
-  return poiLocationParts(location).longitude
-}
-
-function poiLatitude(location: any) {
-  return poiLocationParts(location).latitude
-}
-
-function poiLocationParts(location: any) {
-  if (!location) return { longitude: 0, latitude: 0 }
-  if (typeof location === 'string') {
-    const [longitude, latitude] = location.split(',')
-    return { longitude: Number(longitude || 0), latitude: Number(latitude || 0) }
-  }
-  return {
-    longitude: Number(location.lng ?? location.getLng?.() ?? location.lnglat?.lng ?? location.lnglat?.getLng?.() ?? location[0] ?? 0),
-    latitude: Number(location.lat ?? location.getLat?.() ?? location.lnglat?.lat ?? location.lnglat?.getLat?.() ?? location[1] ?? 0),
-  }
-}
-
-function stablePoiId(poi: any, index: number, type: string) {
-  const source = `${type}-${poi.id || poi.name || index}-${poi.cityname || city.value}-${poi.address || ''}`
-  let hash = 0
-  for (let i = 0; i < source.length; i++) hash = Math.imul(31, hash) + source.charCodeAt(i) | 0
-  return Math.abs(hash)
 }
 
 onMounted(loadOnline)

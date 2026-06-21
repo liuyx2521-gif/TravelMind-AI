@@ -1,10 +1,7 @@
 <template>
   <section class="liquid rounded-[28px] p-5">
     <div class="mb-4 flex flex-wrap items-end justify-between gap-3">
-      <div>
-        <h2 class="m-0 text-2xl">{{ title }}</h2>
-        <p class="m-0 mt-1 text-sm text-[var(--muted)]">聚合小红书、抖音和全网搜索，优先展示实时结果。</p>
-      </div>
+      <h2 class="m-0 text-2xl">{{ title }}</h2>
       <n-button round size="small" :loading="loading" @click="load">刷新</n-button>
     </div>
 
@@ -24,7 +21,6 @@
           <span class="text-xs text-[var(--muted)]">{{ item.type }}</span>
         </div>
         <h3 class="m-0 line-clamp-2 text-base leading-6">{{ item.title }}</h3>
-        <p class="m-0 mt-3 line-clamp-2 text-sm leading-6 text-[var(--muted)]">{{ item.summary }}</p>
       </a>
     </div>
   </section>
@@ -72,9 +68,9 @@ async function load() {
 function localFallback(): SocialItem[] {
   const keyword = encodeURIComponent(`${props.city || ''} ${props.place} 打卡 攻略 美食`.trim())
   return [
-    { platform: '小红书', type: '搜索入口', title: '查看小红书最新图文攻略', url: `https://www.xiaohongshu.com/search_result?keyword=${keyword}`, summary: '跳转后可按热度、最新内容筛选。' },
-    { platform: '抖音', type: '搜索入口', title: '查看抖音热门视频/探店', url: `https://www.douyin.com/search/${keyword}`, summary: '跳转后查看点赞高的视频内容。' },
-    { platform: '全网', type: '搜索入口', title: '全网搜索旅行攻略', url: `https://www.bing.com/search?q=${keyword}`, summary: '用于补充更多实时信息。' },
+    { platform: '小红书', type: '搜索入口', title: '小红书图文攻略', url: `https://www.xiaohongshu.com/search_result?keyword=${keyword}`, summary: '' },
+    { platform: '抖音', type: '搜索入口', title: '抖音视频/探店', url: `https://www.douyin.com/search/${keyword}`, summary: '' },
+    { platform: '全网', type: '搜索入口', title: '全网旅行攻略', url: `https://www.bing.com/search?q=${keyword}`, summary: '' },
   ]
 }
 

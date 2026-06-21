@@ -4,7 +4,9 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
+import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.stereotype.Service;
+import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 import reactor.core.publisher.Flux;
@@ -15,6 +17,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -78,6 +81,26 @@ public class AiService {
         return ask(prompt(req.message(), travelSearchService.context(req.message())));
     }
 
+    public String summarizeConversation(String previousSummary, String history) {
+        return ask("""
+                请把下面的旅行规划对话压缩成“长期记忆摘要”，用于后续多轮对话。
+                要求：
+                - 只保留对后续规划有用的信息。
+                - 包含出发地、目的地、天数、预算、偏好、排除项、已确认酒店/交通/行程、用户特别要求。
+                - 不要写寒暄，不要扩展新信息。
+                - 控制在 300 字以内。
+
+                已有摘要：
+                %s
+
+                新增历史：
+                %s
+                """.formatted(
+                previousSummary == null || previousSummary.isBlank() ? "暂无" : previousSummary,
+                history == null || history.isBlank() ? "暂无" : history
+        ));
+    }
+
     public String plan(PlanReq req) {
         var userInput = """
                 你是 TravelMind AI 旅行规划师。
@@ -137,10 +160,10 @@ public class AiService {
     public Flux<String> stream(ChatReq req) {
         var prompt = prompt(req.message(), travelSearchService.context(req.message()));
         if (isOllama()) {
-            return Flux.just(askOllama(prompt, baseUrl, model));
+            return typewriter(askOllama(prompt, baseUrl, model));
         }
         if (!hasApiKey()) {
-            return Flux.just(askLocalFallback(prompt, "DeepSeek API Key 未配置，已自动切换到本地免费模型。"));
+            return typewriter(askLocalFallback(prompt, "DeepSeek API Key 未配置，已自动切换到本地免费模型。"));
         }
         var body = Map.of(
                 "model", model,
@@ -150,11 +173,17 @@ public class AiService {
         return client.post()
                 .uri("/chat/completions")
                 .contentType(MediaType.APPLICATION_JSON)
+                .accept(MediaType.TEXT_EVENT_STREAM)
                 .bodyValue(body)
                 .retrieve()
-                .bodyToFlux(String.class)
+                .bodyToFlux(new ParameterizedTypeReference<ServerSentEvent<String>>() {})
+                .map(ServerSentEvent::data)
+                .filter(Objects::nonNull)
+                .filter(data -> !"[DONE]".equals(data))
+                .map(this::streamText)
+                .filter(text -> !text.isBlank())
                 .onErrorResume(WebClientResponseException.Unauthorized.class,
-                        e -> Flux.just(askLocalFallback(prompt, "DeepSeek 认证失败，已自动切换到本地免费模型。")));
+                        e -> typewriter(askLocalFallback(prompt, "DeepSeek 认证失败，已自动切换到本地免费模型。")));
     }
 
     private String ask(String prompt) {
@@ -247,5 +276,19 @@ public class AiService {
                 Map.of("role", "system", "content", "你是专业、可靠、简洁的中文旅行规划师。回答自然、有上下文记忆，优先给可执行建议。"),
                 Map.of("role", "user", "content", prompt)
         );
+    }
+
+    private Flux<String> typewriter(String text) {
+        var chars = new ArrayList<String>();
+        text.codePoints().forEach(cp -> chars.add(new String(Character.toChars(cp))));
+        return Flux.fromIterable(chars).delayElements(Duration.ofMillis(18));
+    }
+
+    private String streamText(String data) {
+        try {
+            return objectMapper.readTree(data).at("/choices/0/delta/content").asText();
+        } catch (Exception ignored) {
+            return "";
+        }
     }
 }

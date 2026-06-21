@@ -1,16 +1,22 @@
 <template>
-  <div class="flex min-h-screen items-center justify-center px-4">
-    <div class="liquid w-full max-w-sm rounded-[28px] p-6">
-      <h1 class="m-0 mb-5 text-2xl">登录 TravelMind</h1>
+  <div class="auth-shell flex min-h-screen items-center justify-center px-4">
+    <div class="auth-card liquid w-full max-w-sm rounded-[32px] p-6">
+      <div class="mb-5 flex items-center justify-between gap-3">
+        <div>
+          <span class="travel-sticker">旅行账号</span>
+          <h1 class="m-0 mt-3 text-2xl">登录 TravelMind</h1>
+        </div>
+        <div class="auth-icon">✈</div>
+      </div>
       <n-form>
         <n-form-item label="账号">
           <n-input v-model:value="account" placeholder="用户名或邮箱" />
         </n-form-item>
         <n-form-item label="密码">
-          <n-input v-model:value="password" type="password" placeholder="密码" />
+          <n-input v-model:value="password" type="password" placeholder="请输入密码" />
         </n-form-item>
         <n-button type="primary" block round :loading="loading" @click="login">登录</n-button>
-        <router-link class="mt-4 block text-center text-sm text-[var(--primary)]" to="/register">没有账号，去注册</router-link>
+        <router-link class="mt-4 block text-center text-sm text-[var(--primary)]" to="/register">还没有账号，去注册</router-link>
       </n-form>
     </div>
   </div>

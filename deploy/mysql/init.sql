@@ -83,9 +83,13 @@ CREATE TABLE IF NOT EXISTS travel_note_comment (
   id BIGINT PRIMARY KEY AUTO_INCREMENT,
   note_id BIGINT NOT NULL,
   user_id BIGINT NOT NULL,
+  parent_id BIGINT,
+  username VARCHAR(64),
+  avatar VARCHAR(1024),
   content VARCHAR(1000) NOT NULL,
   create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
-  INDEX idx_comment_note (note_id)
+  INDEX idx_comment_note (note_id),
+  INDEX idx_comment_parent (parent_id)
 );
 
 CREATE TABLE IF NOT EXISTS favorite (
@@ -130,6 +134,8 @@ CREATE TABLE IF NOT EXISTS ai_conversation (
   id BIGINT PRIMARY KEY AUTO_INCREMENT,
   user_id BIGINT NOT NULL,
   title VARCHAR(128),
+  summary LONGTEXT,
+  summary_message_count INT DEFAULT 0,
   create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
   update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   deleted TINYINT DEFAULT 0

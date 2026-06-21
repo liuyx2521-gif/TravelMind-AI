@@ -4,10 +4,8 @@
       <div class="flex flex-wrap items-center justify-between gap-3 border-b border-white/20 p-4 md:p-5">
         <div>
           <h1 class="m-0 text-2xl font-800 md:text-3xl">TravelMind AI</h1>
-          <p class="m-0 mt-1 text-sm text-[var(--muted)]">你可以一直追问，我会记住前面的想法，陪你把行程聊清楚。</p>
         </div>
         <div class="flex gap-2">
-          <n-button round :disabled="messages.length <= 1" @click="savePlan">保存行程</n-button>
           <n-button round @click="newChat">新会话</n-button>
         </div>
       </div>
@@ -57,7 +55,6 @@
         <div class="mb-3 flex items-start justify-between gap-3">
           <div>
             <h2 class="m-0 text-xl">预算示意</h2>
-            <p class="m-0 mt-1 text-xs text-[var(--muted)]">选中哪个方案，这里就看哪个方案的花费。</p>
           </div>
           <div class="rounded-2xl bg-white/55 px-3 py-1 text-sm font-700 dark:bg-white/10">￥{{ activeBudget.total }}</div>
         </div>
@@ -94,11 +91,76 @@
       </div>
 
       <div class="liquid rounded-[28px] p-5">
-        <h2 class="m-0 mb-3 text-xl">对话记忆</h2>
-        <div class="space-y-3 text-sm text-[var(--muted)]">
-          <p class="m-0">当前会话：{{ conversationId ? `#${conversationId}` : '新会话' }}</p>
-          <p class="m-0">你不用重复前面的条件，直接说“第二天轻松一点”“酒店预算降到500”就行。</p>
+        <div class="mb-3 flex items-center justify-between gap-3">
+          <h2 class="m-0 text-xl">历史会话</h2>
+          <n-button size="small" round @click="newChat">新会话</n-button>
         </div>
+        <div v-if="!user.token" class="rounded-2xl bg-white/42 p-3 text-sm text-[var(--muted)] dark:bg-white/6">
+          登录后可同步保存会话。
+        </div>
+        <div v-else class="space-y-2">
+          <div
+            v-for="item in conversations"
+            :key="item.id"
+            class="flex w-full items-center gap-2 rounded-2xl px-3 py-2 text-left text-sm transition"
+            :class="conversationId === item.id ? 'bg-[var(--button-primary-bg)] text-white' : 'bg-white/42 hover:bg-white/65 dark:bg-white/6 dark:hover:bg-white/12'"
+            @click="openConversation(item.id)"
+          >
+            <div class="min-w-0 flex-1">
+              <div class="line-clamp-1 font-700">{{ item.title || '新的旅行咨询' }}</div>
+              <div class="mt-1 text-xs opacity-75">{{ item.updateTime || item.createTime || '' }}</div>
+            </div>
+            <n-popconfirm @positive-click="deleteConversation(item.id)">
+              <template #trigger>
+                <button
+                  class="rounded-full px-2 py-1 text-xs opacity-70 transition hover:bg-white/40 hover:opacity-100 dark:hover:bg-white/10"
+                  :disabled="deletingConversationId === item.id"
+                  @click.stop
+                >
+                  删除
+                </button>
+              </template>
+              删除这条历史会话？
+            </n-popconfirm>
+          </div>
+          <div v-if="!conversations.length" class="rounded-2xl bg-white/42 p-3 text-sm text-[var(--muted)] dark:bg-white/6">
+            暂无历史会话
+          </div>
+        </div>
+      </div>
+
+      <div v-if="weatherCity" class="liquid rounded-[28px] p-5">
+        <div class="mb-3 flex items-center justify-between gap-3">
+          <h2 class="m-0 text-xl">目的地天气</h2>
+          <span class="rounded-2xl bg-white/55 px-3 py-1 text-xs font-700 dark:bg-white/10">{{ weatherCity }}</span>
+        </div>
+        <div v-if="weatherLoading" class="text-sm text-[var(--muted)]">正在更新天气...</div>
+        <div v-else-if="weather" class="grid gap-3">
+          <div class="flex items-end justify-between gap-3">
+            <div class="text-4xl font-900">{{ weather.temperature }}℃</div>
+            <div class="text-right">
+              <div class="font-800">{{ weather.weather }}</div>
+              <div class="mt-1 text-xs text-[var(--muted)]">{{ weather.province }}{{ weather.city }}</div>
+            </div>
+          </div>
+          <div class="grid grid-cols-2 gap-2 text-xs text-[var(--muted)]">
+            <div class="rounded-2xl bg-white/45 px-3 py-2 dark:bg-white/6">湿度 {{ weather.humidity }}%</div>
+            <div class="rounded-2xl bg-white/45 px-3 py-2 dark:bg-white/6">{{ weather.windDirection }}风 {{ weather.windPower }}级</div>
+          </div>
+          <div v-if="weather.forecasts?.length" class="grid gap-2">
+            <div
+              v-for="item in weather.forecasts.slice(0, 3)"
+              :key="item.date"
+              class="flex items-center justify-between rounded-2xl bg-white/42 px-3 py-2 text-xs dark:bg-white/6"
+            >
+              <span>{{ item.date }}</span>
+              <span>{{ item.dayWeather }}</span>
+              <span>{{ item.nightTemp }}-{{ item.dayTemp }}℃</span>
+            </div>
+          </div>
+          <div class="text-xs text-[var(--muted)]">更新于 {{ weather.reportTime }}</div>
+        </div>
+        <div v-else class="text-sm text-[var(--muted)]">{{ weatherError || '暂未获取到天气' }}</div>
       </div>
     </aside>
   </section>
@@ -107,7 +169,6 @@
     <div class="mb-4 flex items-end justify-between gap-4">
       <div>
         <h2 class="m-0 text-2xl">当前季节适合去</h2>
-        <p class="m-0 mt-2 text-sm text-[var(--muted)]">{{ seasonalTip }} 我会优先给你找高德实时 POI 里的当季去处。</p>
       </div>
       <router-link to="/app/attractions" class="text-sm text-[var(--button-text)]">查看全部</router-link>
     </div>
@@ -143,7 +204,8 @@ import * as echarts from 'echarts'
 import { useMessage } from 'naive-ui'
 import AMapLoader from '@amap/amap-jsapi-loader'
 import SocialRecommendations from '../components/SocialRecommendations.vue'
-import { http, type Attraction } from '../api'
+import { http, type AiConversation, type AiMessage, type Attraction, type WeatherInfo } from '../api'
+import { poiLatitude, poiLongitude, poiPhoto, staticMap, type AmapPoi } from '../amapPoi'
 import { realAttractionImage } from '../realAttractionImages'
 import { fallbackPlaceImage } from '../imageFallback'
 import { saveOnlineAttraction } from '../onlineDetail'
@@ -162,6 +224,8 @@ const chatBody = ref<HTMLDivElement>()
 const seasonal = ref<Attraction[]>([])
 const seasonalTip = seasonalAttractionTip()
 const conversationId = ref<number>()
+const conversations = ref<AiConversation[]>([])
+const deletingConversationId = ref<number>()
 const socialVisible = ref(false)
 const showExamples = ref(true)
 const messages = ref<ChatMessage[]>(defaultMessages())
@@ -169,6 +233,12 @@ const examples = [
   '上海去成都玩4天，预算4000，喜欢美食和夜景',
   '北京出发，想看雪景，玩5天，预算6000',
   '广州出发亲子游3天，预算3500，想轻松一点',
+]
+const knownCities = [
+  '北京', '上海', '广州', '深圳', '杭州', '成都', '重庆', '西安', '南京', '苏州', '厦门', '青岛', '三亚',
+  '大理', '丽江', '桂林', '长沙', '武汉', '宁波', '舟山', '台州', '福州', '天津', '哈尔滨', '长春',
+  '沈阳', '大连', '昆明', '贵阳', '拉萨', '乌鲁木齐', '呼伦贝尔', '张家界', '香港', '澳门', '东京',
+  '大阪', '京都', '首尔', '曼谷', '新加坡', '巴黎', '伦敦', '罗马', '纽约', '洛杉矶',
 ]
 
 type ChatMessage = {
@@ -200,46 +270,34 @@ const selectedBudgetIndex = ref(0)
 const budgetPlans = ref<BudgetPlan[]>([fallbackBudgetPlan(3000, '默认方案')])
 const activeBudget = computed(() => budgetPlans.value[selectedBudgetIndex.value] || budgetPlans.value[0])
 const latestTravelText = computed(() => [...messages.value].reverse().map(item => item.content).join('\n'))
-const socialCity = computed(() => extractCity(latestTravelText.value))
+const socialCity = computed(() => destinationCity(latestTravelText.value) || extractCity(latestTravelText.value))
 const socialPlace = computed(() => extractSocialPlace(latestTravelText.value) || socialCity.value || '旅行攻略')
+const weatherCity = computed(() => destinationCity(latestTravelText.value) || extractSocialPlace(latestTravelText.value) || socialCity.value)
+const weather = ref<WeatherInfo>()
+const weatherLoading = ref(false)
+const weatherError = ref('')
 
 async function ask() {
   const text = message.value.trim()
   if (!text || loading.value) return
+  const requestBudget = extractRequestedBudget(text) || 3000
   messages.value.push({ id: crypto.randomUUID(), role: 'user', content: text })
+  const assistant = { id: crypto.randomUUID(), role: 'assistant' as const, content: '' }
+  messages.value.push(assistant)
   message.value = ''
   loading.value = true
+  setBudgetPlans([fallbackBudgetPlan(requestBudget, '生成中')])
   try {
-    const data = await http.post<ChatResp | string>('/api/ai/chat', { conversationId: conversationId.value, message: text })
-    const answer = typeof data === 'string' ? data : data.answer
-    if (typeof data !== 'string') conversationId.value = data.conversationId
-    messages.value.push({ id: crypto.randomUUID(), role: 'assistant', content: answer })
-    setBudgetPlans(parseBudgetPlans(`${text}\n${answer}`))
+    const aiMessage = `${text}\n\n请按本次问题重新生成旅行建议，并给出可直接计算的预算明细：交通、酒店、餐饮、景点、机动。每一项都写明确金额，最后写预计总费用。不要沿用上一轮预算金额。`
+    await streamChat(aiMessage, assistant)
+    setBudgetPlans(parseBudgetPlans(assistant.content, requestBudget))
+    await loadConversations()
   } catch (e) {
+    messages.value = messages.value.filter(item => item.id !== assistant.id)
     toast.error((e as Error).message)
   } finally {
     loading.value = false
     await scrollBottom()
-  }
-}
-
-async function savePlan() {
-  if (!localStorage.getItem('token')) {
-    toast.warning('登录后才可以保存行程')
-    return
-  }
-  const content = messages.value.map(x => `${x.role === 'user' ? '我' : 'TravelMind'}：${x.content}`).join('\n\n')
-  try {
-    await http.post('/api/plans', {
-      title: messages.value.find(x => x.role === 'user')?.content.slice(0, 30) || 'AI生成旅行计划',
-      destination: 'AI推荐目的地',
-      budget: activeBudget.value.total,
-      days: 3,
-      content,
-    })
-    toast.success('已保存')
-  } catch (e) {
-    toast.error((e as Error).message || '保存失败')
   }
 }
 
@@ -255,9 +313,96 @@ function goOnlineAttraction(item: Attraction) {
 function newChat() {
   conversationId.value = undefined
   message.value = ''
-  messages.value = defaultMessages('新会话已开始。你可以直接告诉我出发地、预算、天数、偏好。')
+  messages.value = defaultMessages('新会话已开始。')
   setBudgetPlans([fallbackBudgetPlan(3000, '默认方案')])
   saveChatCache()
+}
+
+async function loadConversations() {
+  if (!user.token) {
+    conversations.value = []
+    return
+  }
+  try {
+    conversations.value = await http.get<AiConversation[]>('/api/ai/conversations')
+  } catch {
+    conversations.value = []
+  }
+}
+
+async function deleteConversation(id: number) {
+  deletingConversationId.value = id
+  try {
+    await http.delete(`/api/ai/conversations/${id}`)
+    conversations.value = conversations.value.filter(item => item.id !== id)
+    if (conversationId.value === id) newChat()
+    toast.success('已删除')
+  } catch (e) {
+    toast.error((e as Error).message || '会话删除失败')
+  } finally {
+    deletingConversationId.value = undefined
+  }
+}
+
+async function streamChat(aiMessage: string, assistant: ChatMessage) {
+  const baseUrl = import.meta.env.VITE_API_BASE_URL || ''
+  const response = await fetch(`${baseUrl}/api/ai/chat/stream`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(localStorage.getItem('token') ? { Authorization: `Bearer ${localStorage.getItem('token')}` } : {}),
+    },
+    body: JSON.stringify({ conversationId: conversationId.value, message: aiMessage }),
+  })
+  if (!response.ok || !response.body) throw new Error(await response.text() || 'AI 回复失败')
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder('utf-8')
+  let buffer = ''
+  while (true) {
+    const { value, done } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+    const blocks = buffer.split(/\r?\n\r?\n/)
+    buffer = blocks.pop() || ''
+    for (const block of blocks) handleStreamBlock(block, assistant)
+    await scrollBottom()
+  }
+  if (buffer.trim()) handleStreamBlock(buffer, assistant)
+  if (!assistant.content.trim()) throw new Error('AI 暂未返回内容')
+}
+
+function handleStreamBlock(block: string, assistant: ChatMessage) {
+  let event = 'message'
+  const data: string[] = []
+  for (const line of block.split(/\n/)) {
+    if (line.startsWith('event:')) event = line.slice(6).trim()
+    if (line.startsWith('data:')) data.push(line.slice(5).trimStart())
+  }
+  const text = data.join('\n')
+  if (!text) return
+  if (event === 'meta') {
+    conversationId.value = Number(text)
+    return
+  }
+  if (event === 'error') throw new Error(text)
+  if (event === 'delta' || event === 'message') assistant.content += text
+}
+
+async function openConversation(id: number) {
+  if (loading.value || conversationId.value === id) return
+  try {
+    const rows = await http.get<AiMessage[]>(`/api/ai/conversations/${id}/messages`)
+    conversationId.value = id
+    messages.value = rows
+      .filter(item => item.role === 'user' || item.role === 'assistant')
+      .map(item => ({ id: String(item.id), role: item.role as 'user' | 'assistant', content: item.content }))
+    if (!messages.value.length) messages.value = defaultMessages()
+    const latestAssistant = [...messages.value].reverse().find(item => item.role === 'assistant')?.content
+    setBudgetPlans(latestAssistant ? parseBudgetPlans(latestAssistant) : [fallbackBudgetPlan(3000, '默认方案')])
+    await scrollBottom()
+  } catch (e) {
+    toast.error((e as Error).message || '会话加载失败')
+  }
 }
 
 async function scrollBottom() {
@@ -284,9 +429,8 @@ function updateBudgetItem(index: number, value: number | null) {
   nextTick(renderBudgetChart)
 }
 
-function parseBudgetPlans(text: string): BudgetPlan[] {
+function parseBudgetPlans(text: string, fallbackTotal = extractRequestedBudget(text) || 3000): BudgetPlan[] {
   const sections = splitPlanSections(text)
-  const fallbackTotal = extractRequestedBudget(text) || 3000
   return sections.map((section, index) => parseBudgetPlan(section.body, section.title || `方案${index + 1}`, fallbackTotal))
 }
 
@@ -383,13 +527,34 @@ function extractExplicitTotal(text: string) {
 }
 
 function extractCity(text: string) {
-  return text.match(/(?:在|从|去|到|目的地[：:]?)\s*([\u4e00-\u9fa5]{2,8})(?:出发|玩|旅游|旅行|打卡|美食|海边|古镇|雪景|$)/)?.[1] || ''
+  const value = text.match(/(?:在|从|去|到|目的地[：:]?)\s*([\u4e00-\u9fa5]{2,8})(?:出发|玩|旅游|旅行|打卡|美食|海边|古镇|雪景|$)/)?.[1] || ''
+  return normalizeCity(value)
 }
 
 function extractSocialPlace(text: string) {
   const direct = text.match(/(?:推荐城市|目的地|推荐目的地|城市)[：:\s]*([\u4e00-\u9fa5]{2,12})/)?.[1]
-  if (direct) return direct
-  return text.match(/去([\u4e00-\u9fa5]{2,12})(?:玩|旅游|旅行|打卡|吃|看|$)/)?.[1] || ''
+  if (direct) return normalizeCity(direct)
+  return normalizeCity(text.match(/去([\u4e00-\u9fa5]{2,12})(?:玩|旅游|旅行|打卡|吃|看|$)/)?.[1] || '')
+}
+
+function destinationCity(text: string) {
+  const patterns = [
+    /从([^，。,. \n]{2,8})(?:出发)?(?:去|到|前往)([^，。,. \n]{2,8})/,
+    /([^，。,. \n]{2,8})(?:出发)?(?:去|到|前往)([^，。,. \n]{2,8})/,
+    /(?:目的地|推荐城市|推荐目的地)[：:\s]*([^，。,. \n]{2,8})/,
+  ]
+  for (const pattern of patterns) {
+    const match = text.match(pattern)
+    const value = match?.[match.length - 1]
+    const city = normalizeCity(value || '')
+    if (city) return city
+  }
+  return ''
+}
+
+function normalizeCity(value: string) {
+  if (!value) return ''
+  return knownCities.find(city => value.includes(city)) || ''
 }
 
 function fallbackBudgetPlan(total: number, title: string): BudgetPlan {
@@ -455,10 +620,16 @@ watch(conversationId, () => {
   saveChatCache()
 })
 
+watch(weatherCity, city => {
+  loadWeather(city)
+})
+
 onMounted(async () => {
   if (user.token && !user.user) await user.fetchMe()
+  await loadConversations()
   restoreChatCache()
   await scrollBottom()
+  await loadWeather(weatherCity.value)
   seasonal.value = await loadOnlineSeasonalAttractions()
   await nextTick()
   renderBudgetChart()
@@ -470,10 +641,11 @@ onMounted(async () => {
 })
 
 watch(() => chatOwnerKey(), () => {
+  loadConversations()
   restoreChatCache()
 })
 
-function defaultMessages(content = '你好，我是 TravelMind AI。告诉我出发地、预算、天数和偏好，我会帮你规划目的地、交通、酒店、美食和每日行程。') {
+function defaultMessages(content = '你好，我是 TravelMind AI。') {
   return [{ id: crypto.randomUUID(), role: 'assistant' as const, content }]
 }
 
@@ -537,12 +709,25 @@ function resizeBudgetChart() {
 
 watch(() => theme.dark, () => nextTick(renderBudgetChart))
 
+async function loadWeather(city: string) {
+  const target = city?.trim()
+  weather.value = undefined
+  weatherError.value = ''
+  if (!target) return
+  weatherLoading.value = true
+  try {
+    weather.value = await http.get<WeatherInfo>('/api/weather', { params: { city: target } })
+  } catch (e) {
+    weatherError.value = (e as Error).message || '天气更新失败'
+  } finally {
+    weatherLoading.value = false
+  }
+}
+
 async function loadOnlineSeasonalAttractions() {
-  const key = import.meta.env.VITE_AMAP_KEY
-  if (!key) return []
   try {
     const results = await http.get<Attraction[]>('/api/attractions/online', {
-      params: { keyword: seasonalAttractionKeyword(), key, limit: 6 },
+      params: { keyword: seasonalAttractionKeyword(), limit: 6 },
     })
     if (results.length) return results.map(item => ({ ...item, source: 'online' as const }))
   } catch {
@@ -571,7 +756,7 @@ async function searchAmapPoi(keyword: string, city: string, pageSize: number) {
   if (securityJsCode) (window as any)._AMapSecurityConfig = { securityJsCode }
   const AMap = await AMapLoader.load({ key, version: '2.0', plugins: ['AMap.PlaceSearch'] })
   const placeSearch = new AMap.PlaceSearch({ city, citylimit: true, extensions: 'all', pageSize, pageIndex: 1 })
-  const result = await new Promise<any[]>((resolve, reject) => {
+  const result = await new Promise<AmapPoi[]>((resolve, reject) => {
     placeSearch.search(keyword, (status: string, res: any) => {
       if (status === 'complete' && res?.poiList?.pois) resolve(res.poiList.pois)
       else reject(new Error(res?.info || '高德在线搜索失败'))
@@ -595,39 +780,4 @@ async function searchAmapPoi(keyword: string, city: string, pageSize: number) {
   }))
 }
 
-function poiPhoto(poi: any) {
-  const photos = Array.isArray(poi.photos) ? poi.photos : []
-  return photos.map((x: any) => x?.url || x).find((x: string) => typeof x === 'string' && x.startsWith('http')) || ''
-}
-
-function staticMap(location: any, key: string) {
-  const text = poiLocationText(location)
-  return text ? `https://restapi.amap.com/v3/staticmap?location=${text}&zoom=13&size=600*320&markers=mid,,A:${text}&key=${key}` : ''
-}
-
-function poiLocationText(location: any) {
-  const longitude = poiLongitude(location)
-  const latitude = poiLatitude(location)
-  return longitude && latitude ? `${longitude},${latitude}` : ''
-}
-
-function poiLongitude(location: any) {
-  return poiLocationParts(location).longitude
-}
-
-function poiLatitude(location: any) {
-  return poiLocationParts(location).latitude
-}
-
-function poiLocationParts(location: any) {
-  if (!location) return { longitude: 0, latitude: 0 }
-  if (typeof location === 'string') {
-    const [longitude, latitude] = location.split(',')
-    return { longitude: Number(longitude || 0), latitude: Number(latitude || 0) }
-  }
-  return {
-    longitude: Number(location.lng ?? location.getLng?.() ?? location.lnglat?.lng ?? location.lnglat?.getLng?.() ?? location[0] ?? 0),
-    latitude: Number(location.lat ?? location.getLat?.() ?? location.lnglat?.lat ?? location.lnglat?.getLat?.() ?? location[1] ?? 0),
-  }
-}
 </script>

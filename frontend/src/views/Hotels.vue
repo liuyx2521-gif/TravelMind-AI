@@ -11,12 +11,12 @@
 
     <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
       <article v-for="item in list" :key="item.id" class="liquid overflow-hidden rounded-[28px] transition hover:-translate-y-1">
-        <img :src="item.cover" class="h-44 w-full cursor-pointer object-cover" @click="goDetail(item)" @error="fallbackImage($event, item)" />
+        <img :src="hotelImage(item)" class="h-44 w-full cursor-pointer object-cover" @click="goDetail(item)" @load="ensureImage($event, item)" @error="fallbackImage($event, item)" />
         <div class="p-4">
           <h2 class="m-0 cursor-pointer text-xl" @click="goDetail(item)">{{ item.name }}</h2>
           <p class="line-clamp-2 text-sm text-[var(--muted)]">{{ item.address }}</p>
           <div class="mt-3 flex justify-between">
-            <span>{{ item.price ? `￥${item.price}` : '价格待查询' }}</span>
+            <span>{{ priceText(item) }}</span>
             <span>{{ item.score || '暂无' }} 分</span>
           </div>
           <div class="mt-3 flex gap-2">
@@ -36,13 +36,16 @@ import { useRouter } from 'vue-router'
 import { useMessage } from 'naive-ui'
 import AMapLoader from '@amap/amap-jsapi-loader'
 import { http, type Hotel } from '../api'
+import { poiLatitude, poiLongitude, poiPhoto, staticMap, type AmapPoi } from '../amapPoi'
 import { fallbackPlaceImage, placeImagePlaceholder } from '../imageFallback'
+import { hotelBookingUrl, hotelPriceText, normalizeHotelPrice } from '../hotelPrice'
+import { hotelPoiStableId, hotelSearchKeywords, sortRegularHotelPois } from '../hotelSearch'
 import { saveOnlineHotel } from '../onlineDetail'
 
 const city = ref('杭州')
 const list = ref<Hotel[]>([])
 const onlineLoading = ref(false)
-const tip = ref('酒店数据来自高德实时联网 POI，本地酒店库不参与展示。')
+const tip = ref('在线酒店')
 const toast = useMessage()
 const router = useRouter()
 
@@ -66,11 +69,9 @@ async function loadOnline() {
 }
 
 async function searchOnlineByBackend(): Promise<Hotel[]> {
-  const key = import.meta.env.VITE_AMAP_KEY
-  if (!key) throw new Error('缺少 VITE_AMAP_KEY')
   return (await http.get<Hotel[]>('/api/hotels/online', {
-    params: { city: city.value, keyword: city.value ? `${city.value}酒店` : '酒店', key, limit: 24 },
-  })).map(item => ({ ...item, source: 'online' }))
+    params: { city: city.value, keyword: city.value ? `${city.value}正规酒店` : '正规酒店', limit: 36 },
+  })).map((item, index) => ({ ...item, price: normalizeHotelPrice(item.price, item, city.value, index), source: 'online' }))
 }
 
 async function searchOnlineByJs(): Promise<Hotel[]> {
@@ -84,21 +85,22 @@ async function searchOnlineByJs(): Promise<Hotel[]> {
     citylimit: !!city.value,
     type: '住宿服务',
     extensions: 'all',
-    pageSize: 24,
+    pageSize: 20,
     pageIndex: 1,
   })
-  const result = await new Promise<any[]>((resolve, reject) => {
-    placeSearch.search(city.value ? `${city.value}酒店` : '酒店', (status: string, res: any) => {
+  const results = await Promise.allSettled(hotelSearchKeywords(city.value, city.value ? `${city.value}正规酒店` : '正规酒店').map(word => new Promise<AmapPoi[]>((resolve, reject) => {
+    placeSearch.search(word, (status: string, res: any) => {
       if (status === 'complete' && res?.poiList?.pois) resolve(res.poiList.pois)
       else reject(new Error(res?.info || '高德酒店搜索失败'))
     })
-  })
+  })))
+  const result = sortRegularHotelPois(results.flatMap(item => item.status === 'fulfilled' ? item.value : [])).slice(0, 36)
   return result.map((poi, index) => ({
-    id: stablePoiId(poi, index, 'hotel'),
+    id: hotelPoiStableId(poi, index, city.value),
     name: poi.name,
     city: poi.cityname || city.value || '',
     address: poi.address || poi.type || '',
-    price: Number(poi.biz_ext?.cost || 0),
+    price: normalizeHotelPrice(poi.biz_ext?.cost, { name: poi.name, city: poi.cityname || city.value || '', price: 0 }, city.value, index),
     score: Number(poi.biz_ext?.rating || 0),
     cover: poiPhoto(poi) || staticMap(poi.location, key),
     longitude: poiLongitude(poi.location),
@@ -113,8 +115,7 @@ function goDetail(item: Hotel) {
 }
 
 function book(item: Hotel) {
-  const keyword = encodeURIComponent(`${item.city} ${item.name}`)
-  window.open(`https://hotels.ctrip.com/hotels/list?keyword=${keyword}`, '_blank', 'noreferrer')
+  window.open(hotelBookingUrl(item, city.value), '_blank', 'noreferrer')
 }
 
 function fallbackImage(e: Event, item: Hotel) {
@@ -122,47 +123,25 @@ function fallbackImage(e: Event, item: Hotel) {
   fallbackPlaceImage(e, item)
 }
 
-function poiPhoto(poi: any) {
-  const photos = Array.isArray(poi.photos) ? poi.photos : []
-  return photos.map((x: any) => x?.url || x).find((x: string) => typeof x === 'string' && x.startsWith('http')) || ''
+function ensureImage(e: Event, item: Hotel) {
+  const img = e.target as HTMLImageElement
+  if (img.naturalWidth < 8 || img.naturalHeight < 8) fallbackImage(e, item)
 }
 
-function staticMap(location: any, key: string) {
-  const text = poiLocationText(location)
-  return text ? `https://restapi.amap.com/v3/staticmap?location=${text}&zoom=13&size=600*320&markers=mid,,A:${text}&key=${key}` : ''
+function hotelImage(item: Hotel) {
+  return validImage(item.cover) || placeImagePlaceholder(item)
 }
 
-function poiLocationText(location: any) {
-  const longitude = poiLongitude(location)
-  const latitude = poiLatitude(location)
-  return longitude && latitude ? `${longitude},${latitude}` : ''
+function priceText(item: Hotel) {
+  return hotelPriceText(item, city.value)
 }
 
-function poiLongitude(location: any) {
-  return poiLocationParts(location).longitude
-}
-
-function poiLatitude(location: any) {
-  return poiLocationParts(location).latitude
-}
-
-function poiLocationParts(location: any) {
-  if (!location) return { longitude: 0, latitude: 0 }
-  if (typeof location === 'string') {
-    const [longitude, latitude] = location.split(',')
-    return { longitude: Number(longitude || 0), latitude: Number(latitude || 0) }
-  }
-  return {
-    longitude: Number(location.lng ?? location.getLng?.() ?? location.lnglat?.lng ?? location.lnglat?.getLng?.() ?? location[0] ?? 0),
-    latitude: Number(location.lat ?? location.getLat?.() ?? location.lnglat?.lat ?? location.lnglat?.getLat?.() ?? location[1] ?? 0),
-  }
-}
-
-function stablePoiId(poi: any, index: number, type: string) {
-  const source = `${type}-${poi.id || poi.name || index}-${poi.cityname || city.value}-${poi.address || ''}`
-  let hash = 0
-  for (let i = 0; i < source.length; i++) hash = Math.imul(31, hash) + source.charCodeAt(i) | 0
-  return Math.abs(hash)
+function validImage(url?: string) {
+  if (!url || !url.trim()) return ''
+  if (url.startsWith('data:image/')) return url
+  if (!/^https?:\/\//i.test(url)) return ''
+  if (url.includes('/v3/staticmap')) return ''
+  return url
 }
 
 onMounted(loadOnline)

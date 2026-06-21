@@ -1,179 +1,376 @@
 <template>
-  <div class="space-y-5">
-    <section class="liquid rounded-[28px] p-5 md:p-7">
-      <h1 class="m-0 text-3xl">旅行工具箱</h1>
-      <p class="m-0 mt-2 text-[var(--muted)]">把出发前最容易纠结的事交给我，预算、路线、避坑和行李都能一起想清楚。</p>
-    </section>
+  <div class="grid gap-5 xl:grid-cols-[minmax(0,1fr)_370px]">
+    <section class="space-y-5">
+      <div class="liquid rounded-[28px] p-5 md:p-7">
+        <div class="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <h1 class="m-0 text-3xl">旅行预算工作台</h1>
+          </div>
+          <div class="flex gap-2">
+            <n-button round @click="resetPlanner">重新规划</n-button>
+          </div>
+        </div>
+      </div>
 
-    <n-tabs v-model:value="active" type="segment" animated>
-      <n-tab-pane name="budget" tab="预算分析">
-        <ToolShell title="预算分析" desc="告诉我从哪出发、去哪、几个人，我帮你把大概要花的钱拆开算清楚。">
-          <template #form>
-            <Field label="出发地">
-              <n-input v-model:value="budget.origin" placeholder="例如杭州" />
-            </Field>
-            <Field label="目的地">
-              <n-input v-model:value="budget.destination" placeholder="例如三亚" />
-            </Field>
-            <div class="grid grid-cols-2 gap-3">
-              <Field label="出行天数">
-                <n-input-number v-model:value="budget.days" class="w-full" placeholder="例如3" />
-              </Field>
-              <Field label="人数">
-                <n-input-number v-model:value="budget.people" class="w-full" placeholder="例如2" />
-              </Field>
-            </div>
-            <Field label="酒店档位">
-              <n-select v-model:value="budget.hotelLevel" :options="hotelLevels" placeholder="选择酒店档位" />
-            </Field>
-            <Field label="出行方式">
-              <n-select v-model:value="budget.transport" :options="transportOptions" placeholder="选择出行方式" />
-            </Field>
-            <Field label="餐饮档位">
-              <n-select v-model:value="budget.foodLevel" :options="foodLevels" placeholder="选择餐饮档位" />
-            </Field>
-            <Field label="门票/项目金额">
-              <n-input-number v-model:value="budget.ticket" class="w-full" placeholder="例如600" />
-            </Field>
-            <n-button type="primary" round block @click="runBudget">生成预算</n-button>
+      <div class="liquid rounded-[28px] p-4">
+        <div class="flex flex-wrap items-center gap-2">
+          <template v-for="(step, index) in steps" :key="step.key">
+            <button
+              class="rounded-2xl px-4 py-2 text-sm font-700 transition"
+              :class="currentStep === index ? 'bg-[var(--button-primary-bg)] text-white shadow-lg' : 'bg-white/45 text-[var(--muted)] hover:bg-white/70 hover:text-[var(--text)] dark:bg-white/8 dark:hover:bg-white/14'"
+              @click="currentStep = index"
+            >
+              <span class="mr-1">{{ step.icon }}</span>{{ step.title }}
+            </button>
+            <span v-if="index < steps.length - 1" class="text-[var(--muted)]">→</span>
           </template>
-          <template #result>
-            <div class="grid gap-3 sm:grid-cols-3">
-              <Metric title="总预算" :value="`￥${budgetResult.total}`" />
-              <Metric title="人均" :value="`￥${budgetResult.perPerson}`" />
-              <Metric title="日均" :value="`￥${budgetResult.perDay}`" />
+        </div>
+      </div>
+
+      <section v-if="currentStep === 0" class="liquid rounded-[28px] p-5">
+        <div class="grid gap-4 md:grid-cols-4">
+          <Field label="出发地">
+            <n-input v-model:value="trip.origin" placeholder="杭州" />
+          </Field>
+          <Field label="目的地">
+            <n-input v-model:value="trip.destination" placeholder="三亚" />
+          </Field>
+          <Field label="出发日期">
+            <n-date-picker v-model:value="trip.date" class="w-full" type="date" clearable />
+          </Field>
+          <Field label="人数">
+            <n-input-number v-model:value="trip.people" class="w-full" :min="1" :max="9" />
+          </Field>
+        </div>
+
+        <div class="mt-5 grid gap-3 lg:grid-cols-3">
+          <article
+            v-for="ticket in ticketOptions"
+            :key="ticket.id"
+            class="cursor-pointer rounded-[24px] border p-4 transition hover:-translate-y-1"
+            :class="selectedTicketId === ticket.id ? 'border-[var(--button-primary-bg)] bg-white/65 shadow-xl dark:bg-white/10' : 'border-white/20 bg-white/40 dark:bg-white/6'"
+            @click="selectedTicketId = ticket.id"
+          >
+            <div class="flex items-center justify-between gap-3">
+              <h3 class="m-0 text-2xl">{{ ticket.trainNo }}</h3>
+              <span class="rounded-full bg-white/60 px-3 py-1 text-xs dark:bg-white/10">{{ ticket.seat }}</span>
             </div>
-            <div ref="budgetChartRef" class="mt-4 h-[280px]"></div>
-            <div class="mt-4 grid grid-cols-2 gap-3">
-              <div v-for="item in budgetResult.items" :key="item.name" class="rounded-2xl bg-white/45 p-3 dark:bg-white/8">
-                <div class="text-sm text-[var(--muted)]">{{ item.name }}</div>
-                <div class="mt-1 text-xl font-800">￥{{ item.value }}</div>
+            <div class="mt-4 flex items-center justify-between gap-3">
+              <div>
+                <div class="text-2xl font-800">{{ ticket.depart }}</div>
+                <div class="text-sm text-[var(--muted)]">{{ trip.origin }}</div>
+              </div>
+              <div class="text-center text-sm text-[var(--muted)]">
+                <div>{{ ticket.duration }}</div>
+                <div class="mt-1 h-px w-20 bg-[var(--muted)]/35"></div>
+                <div class="mt-1">单程</div>
+              </div>
+              <div class="text-right">
+                <div class="text-2xl font-800">{{ ticket.arrive }}</div>
+                <div class="text-sm text-[var(--muted)]">{{ trip.destination }}</div>
               </div>
             </div>
-            <div class="mt-4 rounded-2xl bg-white/35 p-4 text-sm leading-6 text-[var(--muted)] dark:bg-white/6">
-              {{ budgetResult.transportNote }}
+            <div class="mt-4 flex items-center justify-between">
+              <span class="text-2xl font-800 text-[var(--button-primary-bg)]">￥{{ ticket.price }}</span>
+              <n-button size="small" round @click.stop="open12306(ticket)">按当前路线订票</n-button>
             </div>
-          </template>
-        </ToolShell>
-      </n-tab-pane>
+          </article>
+        </div>
 
-      <n-tab-pane name="route" tab="路线对比">
-        <ToolShell title="路线对比" desc="不确定怎么走时，我会给你几种不同节奏的方案，方便你直接比较。">
-          <template #form>
-            <Field label="出发地">
-              <n-input v-model:value="route.origin" placeholder="例如杭州" />
-            </Field>
-            <Field label="目的地">
-              <n-input v-model:value="route.destination" placeholder="例如成都" />
-            </Field>
-            <div class="grid grid-cols-2 gap-3">
-              <Field label="出行天数">
-                <n-input-number v-model:value="route.days" class="w-full" placeholder="例如4" />
-              </Field>
-              <Field label="预算金额">
-                <n-input-number v-model:value="route.budget" class="w-full" placeholder="例如4000" />
-              </Field>
+        <div class="mt-5 flex justify-end">
+          <n-button type="primary" round @click="currentStep = 1">下一步：天数与日程</n-button>
+        </div>
+      </section>
+
+      <section v-else-if="currentStep === 1" class="liquid rounded-[28px] p-5">
+        <div class="grid gap-4 md:grid-cols-3">
+          <Field label="出行天数">
+            <n-input-number v-model:value="trip.days" class="w-full" :min="1" :max="15" />
+          </Field>
+          <Field label="每日餐饮预算">
+            <n-input-number v-model:value="trip.mealPerPersonDay" class="w-full" :min="0" :step="20">
+              <template #prefix>￥</template>
+            </n-input-number>
+          </Field>
+          <Field label="市内交通/日">
+            <n-input-number v-model:value="trip.localTransportDay" class="w-full" :min="0" :step="20">
+              <template #prefix>￥</template>
+            </n-input-number>
+          </Field>
+        </div>
+
+        <div class="mt-5 space-y-3">
+          <article v-for="day in itinerary" :key="day.day" class="rounded-[24px] bg-white/42 p-4 dark:bg-white/6">
+            <div class="grid gap-3 md:grid-cols-[80px_1fr]">
+              <div class="font-800">Day {{ day.day }}</div>
+              <n-input v-model:value="day.title" placeholder="例如：海边拍照 + 夜市美食" />
             </div>
-            <Field label="旅行偏好">
-              <n-input v-model:value="route.preference" type="textarea" :autosize="{ minRows: 3 }" placeholder="例如美食、夜景、少折腾" />
-            </Field>
-            <n-button type="primary" round block :loading="loading.route" @click="runRoute">生成路线对比</n-button>
-          </template>
-          <template #result>
-            <div class="grid gap-3 xl:grid-cols-3">
-              <article v-for="plan in routeCards" :key="plan.name" class="rounded-[24px] bg-white/45 p-4 dark:bg-white/8">
-                <div class="flex items-center justify-between gap-3">
-                  <h3 class="m-0 text-xl">{{ plan.name }}</h3>
-                  <span class="rounded-full bg-[var(--button-bg)] px-3 py-1 text-xs">{{ plan.score }}</span>
+          </article>
+        </div>
+
+        <div class="mt-5 flex justify-between">
+          <n-button round @click="currentStep = 0">上一步</n-button>
+          <n-button type="primary" round @click="currentStep = 2">下一步：选择酒店</n-button>
+        </div>
+      </section>
+
+      <section v-else-if="currentStep === 2" class="liquid rounded-[28px] p-5">
+        <div class="grid gap-4 lg:grid-cols-[1fr_1fr_150px_120px]">
+          <Field label="酒店搜索">
+            <n-input v-model:value="hotelKeyword" placeholder="海景 / 市中心 / 亲子 / 地铁" @keydown.enter="recommendHotels" />
+          </Field>
+          <Field label="目的地">
+            <n-input v-model:value="trip.destination" />
+          </Field>
+          <Field label="酒店档次">
+            <n-select v-model:value="hotelLevel" :options="hotelLevelOptions" />
+          </Field>
+          <Field label="房间数">
+            <n-input-number v-model:value="trip.rooms" class="w-full" :min="1" :max="6" />
+          </Field>
+        </div>
+
+        <div class="mt-4 flex flex-wrap items-center gap-2">
+          <n-button type="primary" round :loading="hotelLoading" @click="recommendHotels">推荐酒店</n-button>
+          <span class="text-sm text-[var(--muted)]">{{ hotelSource }}</span>
+        </div>
+
+        <div class="mt-5 grid gap-4 lg:grid-cols-3">
+          <article
+            v-for="hotel in hotelOptions"
+            :key="hotel.id"
+            class="cursor-pointer overflow-hidden rounded-[24px] border transition hover:-translate-y-1"
+            :class="selectedHotelId === hotel.id ? 'border-[var(--button-primary-bg)] bg-white/65 shadow-xl dark:bg-white/10' : 'border-white/20 bg-white/40 dark:bg-white/6'"
+            @click="selectedHotelId = hotel.id"
+          >
+            <img
+              :key="`${hotel.id}-${hotel.level}-${hotel.cover}`"
+              class="h-40 w-full object-cover"
+              :src="hotelImage(hotel)"
+              :alt="hotel.name"
+              @load="ensureHotelImage($event, hotel)"
+              @error="fallbackHotelImage($event, hotel)"
+            />
+            <div class="p-4">
+              <div class="flex items-start justify-between gap-3">
+                <h3 class="m-0 text-xl">{{ hotel.name }}</h3>
+                <span class="rounded-full bg-white/60 px-2 py-1 text-xs dark:bg-white/10">{{ hotel.score }}分</span>
+              </div>
+              <p class="mt-2 line-clamp-2 text-sm leading-6 text-[var(--muted)]">{{ hotel.reason }}</p>
+              <div class="mt-3 grid gap-1 text-sm text-[var(--muted)]">
+                <div>{{ hotel.nearestStation }} · 约{{ hotel.stationDistance }}km</div>
+                <div>{{ hotel.route }}</div>
+              </div>
+              <div class="mt-3 flex items-end justify-between gap-3">
+                <div>
+                  <div class="text-xs text-[var(--muted)]">平台价格</div>
+                  <div class="text-2xl font-800 text-[var(--button-primary-bg)]">{{ hotelPriceText(hotel) }}</div>
                 </div>
-                <p class="text-sm leading-6 text-[var(--muted)]">{{ plan.desc }}</p>
-                <div class="mt-3 grid gap-2 text-sm">
-                  <div>交通：{{ plan.transport }}</div>
-                  <div>费用：{{ plan.cost }}</div>
-                  <div>适合：{{ plan.fit }}</div>
+                <div class="flex gap-2">
+                  <n-button size="small" round @click.stop="openHotelDetail(hotel)">详情</n-button>
+                  <n-button size="small" round @click.stop="openHotelBooking(hotel)">预订</n-button>
                 </div>
-              </article>
+              </div>
             </div>
-            <ResultText :text="answers.route" />
-          </template>
-        </ToolShell>
-      </n-tab-pane>
+          </article>
+        </div>
 
-      <n-tab-pane name="pitfall" tab="避坑助手">
-        <ToolShell title="避坑助手" desc="出发前先看看哪些地方容易踩坑，订票、住宿、吃饭和游玩都少走弯路。">
-          <template #form>
-            <Field label="目的地">
-              <n-input v-model:value="pitfall.destination" placeholder="例如三亚" />
-            </Field>
-            <Field label="旅行玩法">
-              <n-input v-model:value="pitfall.preference" type="textarea" :autosize="{ minRows: 3 }" placeholder="例如海边、亲子、夜市、租车" />
-            </Field>
-            <n-button type="primary" round block :loading="loading.pitfall" @click="runPitfall">生成避坑清单</n-button>
-          </template>
-          <template #result>
-            <div class="grid gap-3 md:grid-cols-2">
-              <article v-for="item in pitfallCards" :key="item.title" class="rounded-[22px] bg-white/45 p-4 dark:bg-white/8">
-                <h3 class="m-0">{{ item.icon }} {{ item.title }}</h3>
-                <p class="m-0 mt-2 text-sm leading-6 text-[var(--muted)]">{{ item.text }}</p>
-              </article>
-            </div>
-            <ResultText :text="answers.pitfall" />
-          </template>
-        </ToolShell>
-      </n-tab-pane>
+        <div class="mt-5 flex justify-between">
+          <n-button round @click="currentStep = 1">上一步</n-button>
+          <n-button type="primary" round @click="currentStep = 3">下一步：准备行李</n-button>
+        </div>
+      </section>
 
-      <n-tab-pane name="packing" tab="行李清单">
-        <ToolShell title="行李清单" desc="告诉我去哪玩、玩几天、和谁去，我帮你列一份出门前能直接勾选的清单。">
-          <template #form>
-            <Field label="目的地">
-              <n-input v-model:value="packing.destination" placeholder="例如哈尔滨" />
-            </Field>
-            <div class="grid grid-cols-2 gap-3">
-              <Field label="出行天数">
-                <n-input-number v-model:value="packing.days" class="w-full" placeholder="例如4" />
-              </Field>
-              <Field label="出行人群">
-                <n-select v-model:value="packing.peopleType" :options="peopleTypes" placeholder="选择人群" />
-              </Field>
+      <section v-else-if="currentStep === 3" class="liquid rounded-[28px] p-5">
+        <div>
+          <h2 class="m-0 text-2xl">随身必备</h2>
+          <div class="mt-3 grid gap-3 md:grid-cols-2">
+            <label
+              v-for="item in packingItems"
+              :key="item.name"
+              class="flex items-center gap-3 rounded-2xl bg-white/42 p-3 dark:bg-white/6"
+            >
+              <n-checkbox v-model:checked="item.checked" />
+              <span>{{ item.name }}</span>
+            </label>
+          </div>
+
+          <div class="mt-4 grid gap-3 md:grid-cols-[1fr_90px]">
+            <n-input v-model:value="customPacking.name" placeholder="添加随身必备，例如耳机、眼罩" />
+            <n-button round @click="addPackingItem">添加</n-button>
+          </div>
+        </div>
+
+        <div class="mt-6 border-t border-white/30 pt-5">
+          <h2 class="m-0 text-2xl">本次需要购买</h2>
+          <div class="mt-3 grid gap-3 md:grid-cols-2">
+            <label
+              v-for="item in purchaseItems"
+              :key="item.name"
+              class="flex items-center justify-between gap-3 rounded-2xl bg-white/42 p-3 dark:bg-white/6"
+            >
+              <div class="flex items-center gap-3">
+                <n-checkbox v-model:checked="item.checked" />
+                <span>{{ item.name }}</span>
+              </div>
+              <n-input-number v-model:value="item.price" class="max-w-[130px]" size="small" :min="0" :step="20">
+                <template #prefix>￥</template>
+              </n-input-number>
+            </label>
+          </div>
+
+          <div class="mt-4 grid gap-3 md:grid-cols-[1fr_140px_90px]">
+            <n-input v-model:value="customPurchase.name" placeholder="添加需要购买的物品" />
+            <n-input-number v-model:value="customPurchase.price" class="w-full" :min="0" :step="20">
+              <template #prefix>￥</template>
+            </n-input-number>
+            <n-button round @click="addPurchaseItem">添加</n-button>
+          </div>
+        </div>
+
+        <div class="mt-5 flex justify-between">
+          <n-button round @click="currentStep = 2">上一步</n-button>
+          <n-button type="primary" round @click="currentStep = 4">查看最终行程</n-button>
+        </div>
+      </section>
+
+      <section v-else class="liquid rounded-[28px] p-5">
+        <div class="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h2 class="m-0 text-2xl">{{ trip.origin }} → {{ trip.destination }} {{ trip.days }}天{{ nights }}晚</h2>
+          </div>
+          <div class="rounded-2xl bg-[var(--button-primary-bg)] px-4 py-2 text-white">总预算 ￥{{ budget.total }}</div>
+        </div>
+
+        <div class="mt-5 grid gap-4 md:grid-cols-2">
+          <PreviewCard title="车票" :main="`${selectedTicket?.trainNo} ${selectedTicket?.seat}`" :sub="`${trip.origin} ${selectedTicket?.depart} → ${trip.destination} ${selectedTicket?.arrive}`" />
+          <PreviewCard title="酒店" :main="selectedHotel?.name || ''" :sub="`${nights}晚 · ${selectedHotel?.nearestStation || ''} · ${selectedHotel ? hotelPriceText(selectedHotel) : ''}/晚`" />
+        </div>
+
+        <div class="mt-5 space-y-3">
+          <article v-for="day in itinerary" :key="day.day" class="rounded-2xl bg-white/42 p-4 dark:bg-white/6">
+            <div class="flex items-center gap-3">
+              <div class="rounded-2xl bg-[var(--button-primary-bg)] px-3 py-1 text-sm text-white">Day {{ day.day }}</div>
+              <div class="font-700">{{ day.title }}</div>
             </div>
-            <Field label="旅行玩法">
-              <n-input v-model:value="packing.preference" type="textarea" :autosize="{ minRows: 3 }" placeholder="例如雪景、徒步、亲子、海边" />
-            </Field>
-            <n-button type="primary" round block :loading="loading.packing" @click="runPacking">生成行李清单</n-button>
-          </template>
-          <template #result>
-            <div class="grid gap-3 md:grid-cols-2">
-              <label v-for="item in packingItems" :key="item" class="flex items-center gap-3 rounded-2xl bg-white/45 p-3 dark:bg-white/8">
-                <n-checkbox />
-                <span>{{ item }}</span>
-              </label>
+          </article>
+        </div>
+
+        <div class="mt-5 rounded-[24px] bg-white/42 p-4 dark:bg-white/6">
+          <h3 class="m-0 mb-3 text-xl">行李清单</h3>
+          <div class="space-y-3">
+            <div class="flex flex-wrap gap-2">
+              <span v-for="item in selectedPackingItems" :key="item.name" class="rounded-2xl bg-white/60 px-3 py-1.5 text-sm dark:bg-white/10">
+                {{ item.name }}
+              </span>
             </div>
-            <ResultText :text="answers.packing" />
-          </template>
-        </ToolShell>
-      </n-tab-pane>
-    </n-tabs>
+            <div v-if="selectedPurchaseItems.length" class="flex flex-wrap gap-2 border-t border-white/30 pt-3">
+              <span v-for="item in selectedPurchaseItems" :key="item.name" class="rounded-2xl bg-white/60 px-3 py-1.5 text-sm dark:bg-white/10">
+                {{ item.name }}{{ item.price ? ` · ￥${item.price}` : '' }}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div class="mt-5 flex flex-wrap justify-between gap-2">
+          <n-button round @click="currentStep = 3">上一步</n-button>
+          <div class="flex gap-2">
+            <n-button round @click="open12306(selectedTicket)">订车票</n-button>
+            <n-button type="primary" round @click="openHotelBooking(selectedHotel)">订酒店</n-button>
+            <n-button type="primary" round :loading="savingPlan" @click="saveToolPlan">保存行程</n-button>
+          </div>
+        </div>
+      </section>
+    </section>
+
+    <aside class="liquid sticky top-5 h-fit rounded-[28px] p-5">
+      <div class="flex items-start justify-between gap-3">
+        <div>
+          <h2 class="m-0 text-2xl">实时预算</h2>
+          <p class="m-0 mt-1 text-sm text-[var(--muted)]">{{ trip.origin }} → {{ trip.destination }} · {{ trip.days }}天{{ nights }}晚</p>
+        </div>
+        <div class="rounded-2xl bg-[var(--button-primary-bg)] px-3 py-2 text-white">￥{{ budget.total }}</div>
+      </div>
+
+      <div class="mt-5 space-y-3">
+        <BudgetRow v-for="item in budget.items" :key="item.name" :item="item" :total="budget.total" />
+      </div>
+
+      <div class="mt-5 grid grid-cols-2 gap-3">
+        <Metric title="人均" :value="budget.perPerson" />
+        <Metric title="日均" :value="budget.perDay" />
+      </div>
+
+      <div class="mt-5 grid gap-2">
+        <n-button type="primary" round block @click="open12306(selectedTicket)">确认车票</n-button>
+        <n-button round block @click="openHotelBooking(selectedHotel)">确认酒店价格</n-button>
+      </div>
+    </aside>
+
+    <n-modal v-model:show="hotelDetailVisible" preset="card" class="max-w-[920px]" :bordered="false">
+      <div v-if="detailHotel" class="grid gap-5 md:grid-cols-[1.15fr_.85fr]">
+        <img class="h-[360px] w-full rounded-[24px] object-cover" :src="hotelImage(detailHotel)" :alt="detailHotel.name" @error="fallbackHotelImage($event, detailHotel)" />
+        <div>
+          <div class="text-sm font-700 text-[var(--muted)]">{{ detailHotel.city }} · {{ detailHotel.levelLabel }} · {{ detailHotel.score }}分</div>
+          <h2 class="m-0 mt-2 text-3xl">{{ detailHotel.name }}</h2>
+          <p class="mt-4 text-base leading-8 text-[var(--muted)]">{{ detailHotel.reason }}</p>
+          <div class="mt-4 grid gap-3 text-sm">
+            <div class="rounded-2xl bg-white/45 p-3 dark:bg-white/6">最近交通：{{ detailHotel.nearestStation }}，约{{ detailHotel.stationDistance }}km</div>
+            <div class="rounded-2xl bg-white/45 p-3 dark:bg-white/6">到达方式：{{ detailHotel.route }}</div>
+            <div class="rounded-2xl bg-white/45 p-3 dark:bg-white/6">地址：{{ detailHotel.address || detailHotel.desc }}</div>
+          </div>
+          <div class="mt-5 flex flex-wrap gap-2">
+            <n-button type="primary" round @click="openHotelBooking(detailHotel)">预订酒店</n-button>
+            <n-button round @click="openHotelNavigation(detailHotel)">打开导航</n-button>
+          </div>
+        </div>
+      </div>
+    </n-modal>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, defineComponent, h, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
-import * as echarts from 'echarts'
-import { http } from '../api'
+import { computed, defineComponent, h, onMounted, reactive, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
+import { useMessage } from 'naive-ui'
+import AMapLoader from '@amap/amap-jsapi-loader'
+import { http, type Hotel } from '../api'
+import type { AmapPoi } from '../amapPoi'
+import { hotelBookingUrl } from '../hotelPrice'
+import { hotelSearchKeywords, sortRegularHotelPois } from '../hotelSearch'
+import {
+  ensureHotelImage as checkHotelImage,
+  fallbackHotels as createFallbackHotels,
+  hotelFromApi,
+  hotelFromPoi,
+  hotelImage as resolveHotelImage,
+  hotelLevelOptions,
+  hotelPriceText as formatHotelPrice,
+  repairHotelImage,
+  type HotelOption,
+} from '../hotelPlanner'
+import {
+  buildPlanContent as createPlanContent,
+  defaultItinerary,
+  defaultPackingItems,
+  defaultPurchaseItems,
+  defaultTrip,
+  emptyTrip,
+  syncItineraryDays,
+  ticketOptions as createTicketOptions,
+  tripBudget,
+  planTitle as createPlanTitle,
+  type PackingItem,
+} from '../tripPlanner'
+import { cityCoords, cityDistance, dateText, levelText, stationCodes, transitAnchors } from '../travelMath'
+import { useUserStore } from '../stores/user'
 
-const ToolShell = defineComponent({
-  props: { title: String, desc: String },
-  setup(props, { slots }) {
-    return () => h('div', { class: 'grid gap-5 lg:grid-cols-[360px_1fr]' }, [
-      h('section', { class: 'liquid h-fit rounded-[28px] p-5' }, [
-        h('h2', { class: 'm-0 text-2xl' }, props.title),
-        h('p', { class: 'm-0 mt-2 mb-5 text-sm text-[var(--muted)]' }, props.desc),
-        h('div', { class: 'grid gap-3' }, slots.form?.()),
-      ]),
-      h('section', { class: 'liquid min-h-[420px] rounded-[28px] p-5' }, slots.result?.()),
-    ])
-  },
-})
+type AmapWindow = Window & { _AMapSecurityConfig?: { securityJsCode: string } }
+type AmapSearchResponse = { poiList?: { pois?: AmapPoi[] }; info?: string }
+
+const toast = useMessage()
+const router = useRouter()
+const user = useUserStore()
 
 const Field = defineComponent({
   props: { label: String },
@@ -185,226 +382,302 @@ const Field = defineComponent({
   },
 })
 
-const Metric = defineComponent({
-  props: { title: String, value: String },
+const BudgetRow = defineComponent({
+  props: { item: { type: Object, required: true }, total: { type: Number, required: true } },
   setup(props) {
-    return () => h('div', { class: 'rounded-2xl bg-white/45 p-4 dark:bg-white/8' }, [
-      h('div', { class: 'text-sm text-[var(--muted)]' }, props.title),
-      h('div', { class: 'mt-1 text-2xl font-800' }, props.value),
+    return () => {
+      const item = props.item as { name: string; value: number }
+      const percent = props.total ? Math.round(item.value * 100 / props.total) : 0
+      return h('div', { class: 'rounded-2xl bg-white/42 p-3 dark:bg-white/6' }, [
+        h('div', { class: 'flex justify-between text-sm' }, [
+          h('span', item.name),
+          h('span', `￥${item.value}`),
+        ]),
+        h('div', { class: 'mt-2 h-2 overflow-hidden rounded-full bg-white/60 dark:bg-white/10' }, [
+          h('div', { class: 'h-full rounded-full bg-[var(--button-primary-bg)]', style: { width: `${percent}%` } }),
+        ]),
+      ])
+    }
+  },
+})
+
+const Metric = defineComponent({
+  props: { title: String, value: Number },
+  setup(props) {
+    return () => h('div', { class: 'rounded-2xl bg-white/42 p-3 text-center dark:bg-white/6' }, [
+      h('div', { class: 'text-xs text-[var(--muted)]' }, props.title),
+      h('div', { class: 'mt-1 text-xl font-800' }, `￥${props.value}`),
     ])
   },
 })
 
-const ResultText = defineComponent({
-  props: { text: String },
+const PreviewCard = defineComponent({
+  props: { title: String, main: String, sub: String },
   setup(props) {
-    return () => props.text
-      ? h('pre', { class: 'mt-4 max-h-[360px] overflow-auto whitespace-pre-wrap rounded-2xl bg-white/35 p-4 font-sans text-sm leading-7 text-[var(--muted)] dark:bg-white/6' }, props.text)
-      : h('div', { class: 'mt-4 rounded-2xl bg-white/35 p-4 text-center text-[var(--muted)] dark:bg-white/6' }, '点击左侧按钮生成结果')
+    return () => h('article', { class: 'rounded-[24px] bg-white/42 p-4 dark:bg-white/6' }, [
+      h('div', { class: 'text-sm text-[var(--muted)]' }, props.title),
+      h('h3', { class: 'm-0 mt-2 text-xl' }, props.main),
+      h('p', { class: 'm-0 mt-2 text-sm leading-6 text-[var(--muted)]' }, props.sub),
+    ])
   },
 })
 
-const active = ref('budget')
-const budgetChartRef = ref<HTMLDivElement>()
-let budgetChart: echarts.ECharts | undefined
-
-const budget = reactive({ origin: '杭州', destination: '三亚', days: 3, people: 2, hotelLevel: 'comfort', transport: 'train', foodLevel: 'normal', ticket: 600 })
-const route = reactive({ origin: '杭州', destination: '成都', days: 4, budget: 4000, preference: '美食 夜景 少折腾' })
-const pitfall = reactive({ destination: '三亚', preference: '海边 美食 拍照' })
-const packing = reactive({ destination: '哈尔滨', days: 4, peopleType: 'couple', preference: '雪景 城市游 拍照' })
-const answers = reactive({ route: '', pitfall: '', packing: '' })
-const loading = reactive({ route: false, pitfall: false, packing: false })
-
-const hotelLevels = [
-  { label: '经济型', value: 'budget' },
-  { label: '舒适型', value: 'comfort' },
-  { label: '高端型', value: 'premium' },
-]
-const transportOptions = [
-  { label: '高铁/火车', value: 'train' },
-  { label: '飞机', value: 'flight' },
-  { label: '自驾/打车', value: 'car' },
-]
-const foodLevels = [
-  { label: '节省', value: 'save' },
-  { label: '正常', value: 'normal' },
-  { label: '吃好一点', value: 'premium' },
-]
-const peopleTypes = [
-  { label: '情侣', value: 'couple' },
-  { label: '亲子', value: 'family' },
-  { label: '学生', value: 'student' },
-  { label: '老人', value: 'senior' },
+const steps = [
+  { key: 'ticket', title: '车票', icon: '↗' },
+  { key: 'days', title: '日程', icon: '○' },
+  { key: 'hotel', title: '酒店', icon: '◇' },
+  { key: 'packing', title: '行李', icon: '□' },
+  { key: 'preview', title: '预览', icon: '✓' },
 ]
 
-const cityCoords: Record<string, [number, number]> = {
-  北京: [116.4074, 39.9042],
-  上海: [121.4737, 31.2304],
-  广州: [113.2644, 23.1291],
-  深圳: [114.0579, 22.5431],
-  杭州: [120.1551, 30.2741],
-  南京: [118.7969, 32.0603],
-  苏州: [120.5853, 31.2989],
-  成都: [104.0665, 30.5728],
-  重庆: [106.5516, 29.5630],
-  西安: [108.9398, 34.3416],
-  武汉: [114.3054, 30.5928],
-  长沙: [112.9388, 28.2282],
-  厦门: [118.0894, 24.4798],
-  福州: [119.2965, 26.0745],
-  青岛: [120.3826, 36.0671],
-  三亚: [109.5119, 18.2528],
-  海口: [110.1983, 20.0440],
-  昆明: [102.8329, 24.8801],
-  大理: [100.2676, 25.6065],
-  丽江: [100.2330, 26.8721],
-  桂林: [110.2900, 25.2736],
-  哈尔滨: [126.6425, 45.7560],
-  沈阳: [123.4315, 41.8057],
-  天津: [117.2000, 39.1333],
-  郑州: [113.6254, 34.7466],
-  合肥: [117.2272, 31.8206],
-  济南: [117.1201, 36.6512],
-  拉萨: [91.1322, 29.6604],
-  乌鲁木齐: [87.6168, 43.8256],
-}
+const currentStep = ref(0)
+const hotelKeyword = ref('海景')
+const hotelLevel = ref('comfort')
+const hotelLoading = ref(false)
+const hotelSource = ref('填写目的地后，可按偏好推荐酒店。')
+const hotelDetailVisible = ref(false)
+const detailHotel = ref<HotelOption>()
+const savingPlan = ref(false)
+const selectedTicketId = ref('g')
+const selectedHotelId = ref('hotel-1')
+const customPacking = reactive({ name: '' })
+const customPurchase = reactive({ name: '', price: 0 })
+const trip = reactive(defaultTrip())
+const itinerary = ref(defaultItinerary())
+const packingItems = reactive<PackingItem[]>(defaultPackingItems())
+const purchaseItems = reactive<PackingItem[]>(defaultPurchaseItems())
+const hotelOptions = ref<HotelOption[]>(fallbackHotels())
+const nights = computed(() => Math.max(1, (trip.days || 1) - 1))
+const distance = computed(() => cityDistance(trip.origin.trim(), trip.destination.trim()) || 1200)
+const selectedPackingItems = computed(() => packingItems.filter(item => item.checked))
+const selectedPurchaseItems = computed(() => purchaseItems.filter(item => item.checked))
+const ticketOptions = computed(() => createTicketOptions(trip.origin, trip.destination, distance.value))
+const selectedTicket = computed(() => ticketOptions.value.find(item => item.id === selectedTicketId.value) || ticketOptions.value[0])
+const selectedHotel = computed(() => hotelOptions.value.find(item => item.id === selectedHotelId.value) || hotelOptions.value[0])
+const budget = computed(() => tripBudget(trip, nights.value, selectedTicket.value, selectedHotel.value, selectedPurchaseItems.value))
 
-const budgetResult = computed(() => {
-  const days = Math.max(1, budget.days || 1)
-  const people = Math.max(1, budget.people || 1)
-  const hotelPerNight = { budget: 260, comfort: 520, premium: 980 }[budget.hotelLevel] || 520
-  const transport = estimateTransport(budget.origin, budget.destination, budget.transport, people)
-  const foodPerPersonDay = { save: 80, normal: 150, premium: 280 }[budget.foodLevel] || 150
-  const items = [
-    { name: '酒店', value: Math.round(hotelPerNight * Math.max(1, days - 1)) },
-    { name: '交通', value: transport.total },
-    { name: '餐饮', value: Math.round(foodPerPersonDay * people * days) },
-    { name: '门票', value: Math.round(budget.ticket || 0) },
-  ]
-  const subtotal = items.reduce((sum, item) => sum + item.value, 0)
-  const other = Math.round(subtotal * 0.12)
-  items.push({ name: '备用金', value: other })
-  const total = subtotal + other
-  return { items, total, perPerson: Math.round(total / people), perDay: Math.round(total / days), transportNote: transport.note }
+watch(() => trip.days, days => {
+  itinerary.value = syncItineraryDays(itinerary.value, days || 1)
 })
 
-function estimateTransport(origin: string, destination: string, mode: string, people: number) {
-  const distance = cityDistance(origin.trim(), destination.trim())
-  if (!distance) {
-    const fallback = { train: 550, flight: 950, car: 420 }[mode] || 550
-    return {
-      total: Math.round(fallback * people),
-      note: `交通估算：未识别到 ${origin || '出发地'} 到 ${destination || '目的地'} 的城市距离，按${transportLabel(mode)}默认单人往返约 ￥${fallback} 估算。`,
+watch(() => trip.people, people => {
+  trip.rooms = Math.max(1, Math.ceil((people || 1) / 2))
+})
+
+watch(() => trip.destination, () => {
+  hotelOptions.value = trip.destination ? fallbackHotels() : []
+  selectedHotelId.value = hotelOptions.value[0]?.id || ''
+})
+
+watch(hotelLevel, () => {
+  hotelOptions.value = trip.destination ? fallbackHotels() : []
+  selectedHotelId.value = hotelOptions.value[0]?.id || ''
+  if (trip.destination) recommendHotels()
+})
+
+onMounted(recommendHotels)
+
+function resetPlanner() {
+  Object.assign(trip, emptyTrip())
+  itinerary.value = [{ day: 1, title: '' }]
+  currentStep.value = 0
+  selectedTicketId.value = ''
+  selectedHotelId.value = ''
+  hotelKeyword.value = ''
+  hotelLevel.value = 'comfort'
+  hotelOptions.value = []
+  hotelSource.value = '填写目的地后，可按偏好推荐酒店。'
+  resetPackingItems()
+  customPacking.name = ''
+  customPurchase.name = ''
+  customPurchase.price = 0
+}
+
+async function recommendHotels() {
+  hotelLoading.value = true
+  hotelSource.value = '正在查找合适的酒店'
+  try {
+    const mapped = await searchOnlineHotels()
+    if (mapped.length) {
+      hotelOptions.value = mapped
+      selectedHotelId.value = mapped[0].id
+      hotelSource.value = `已找到 ${mapped.length} 家可选酒店`
+      return
     }
-  }
-  const oneWay = Math.round(distance)
-  const singleRoundTrip = mode === 'flight'
-    ? Math.max(650, Math.round(distance * 0.75 + 260))
-    : mode === 'car'
-      ? Math.max(300, Math.round(distance * 1.15 + 180))
-      : Math.max(180, Math.round(distance * 0.46 + 120))
-  return {
-    total: Math.round(singleRoundTrip * people),
-    note: `交通估算：${origin} 到 ${destination} 约 ${oneWay} 公里，按${transportLabel(mode)}估算单人往返约 ￥${singleRoundTrip}，${people} 人合计约 ￥${singleRoundTrip * people}。实际价格会受节假日、购票时间和班次影响。`,
+    throw new Error('暂未找到在线酒店')
+  } catch (error) {
+    hotelOptions.value = fallbackHotels()
+    selectedHotelId.value = hotelOptions.value[0]?.id || ''
+    hotelSource.value = '暂未获取在线结果，已保留可选推荐'
+    toast.warning(hotelSource.value)
+  } finally {
+    hotelLoading.value = false
   }
 }
 
-function cityDistance(origin: string, destination: string) {
-  const start = cityCoords[origin]
-  const end = cityCoords[destination]
-  if (!start || !end) return 0
-  const rad = Math.PI / 180
-  const dLat = (end[1] - start[1]) * rad
-  const dLng = (end[0] - start[0]) * rad
-  const lat1 = start[1] * rad
-  const lat2 = end[1] * rad
-  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2
-  return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
-}
-
-function transportLabel(mode: string) {
-  return ({ train: '高铁/火车', flight: '飞机', car: '自驾/打车' } as Record<string, string>)[mode] || '交通方式'
-}
-
-const routeCards = computed(() => [
-  { name: '省钱方案', score: '性价比高', transport: budget.transport === 'flight' ? '高铁优先' : '火车/地铁优先', cost: `约￥${Math.round((route.budget || 3000) * 0.82)}`, fit: '学生、预算敏感', desc: '减少换乘和高价项目，把预算留给核心景点和美食。' },
-  { name: '舒适方案', score: '推荐', transport: '高铁/飞机 + 市区打车', cost: `约￥${route.budget || 3000}`, fit: '情侣、家庭', desc: '住宿位置更好，节奏适中，适合第一次去目的地。' },
-  { name: '高效方案', score: '少折腾', transport: '飞机/直达交通', cost: `约￥${Math.round((route.budget || 3000) * 1.18)}`, fit: '假期短、重体验', desc: '减少路上时间，优先覆盖最值得去的区域。' },
-])
-
-const pitfallCards = computed(() => [
-  { icon: '🚕', title: '交通', text: `${pitfall.destination} 出行先看实时路况，机场/车站打车优先走正规平台。` },
-  { icon: '🏨', title: '住宿', text: '订房前确认位置、取消政策、押金、停车和到核心景点的真实通勤时间。' },
-  { icon: '🍜', title: '美食', text: '热门店看近期评价，海鲜和夜市注意明码标价，避免只看单个平台推荐。' },
-  { icon: '🎫', title: '景点', text: '热门景区提前预约，注意闭园时间、天气变化和临时限流。' },
-])
-
-const packingItems = computed(() => {
-  const base = ['身份证/护照', '手机充电器', '充电宝', '常用药', '雨伞或雨衣', '舒适鞋']
-  const extra = /雪|冷|哈尔滨/.test(`${packing.destination}${packing.preference}`)
-    ? ['羽绒服', '保暖内衣', '手套围巾', '暖宝宝', '防滑鞋']
-    : /海|三亚|沙滩/.test(`${packing.destination}${packing.preference}`)
-      ? ['防晒霜', '墨镜', '泳衣', '拖鞋', '防水袋']
-      : ['轻便外套', '防晒用品', '一次性毛巾']
-  return [...base, ...extra]
-})
-
-function runBudget() {
-  nextTick(renderBudgetChart)
-}
-
-async function runRoute() {
-  loading.route = true
+async function searchOnlineHotels() {
   try {
-    answers.route = await http.post('/api/ai/plan', {
-      origin: route.origin,
-      destination: `${route.destination}，请对比省钱、舒适、高效三种路线`,
-      days: route.days,
-      budget: route.budget,
-      preference: route.preference,
+    const rows = await searchOnlineHotelsByBackend()
+    if (rows.length) return rows
+  } catch {
+    // Try browser-side AMap SDK next. This works when backend is not available.
+  }
+  const key = import.meta.env.VITE_AMAP_KEY
+  if (!key) throw new Error('缺少 VITE_AMAP_KEY')
+  return searchOnlineHotelsByJs(key)
+}
+
+async function searchOnlineHotelsByBackend() {
+  const keyword = `${trip.destination}${levelText(hotelLevel.value)}正规酒店 ${hotelKeyword.value}`.trim()
+  const rows = await http.get<Hotel[]>('/api/hotels/online', {
+    params: { city: trip.destination, keyword, limit: 18 },
+  })
+  return rows
+    .filter(row => row.name)
+    .slice(0, 3)
+    .map((row, index) => hotelFromApi(row, index, trip.destination, hotelLevel.value, hotelKeyword.value))
+}
+
+async function searchOnlineHotelsByJs(key: string) {
+  const securityJsCode = import.meta.env.VITE_AMAP_SECURITY_CODE
+  if (securityJsCode) (window as AmapWindow)._AMapSecurityConfig = { securityJsCode }
+  const AMap = await AMapLoader.load({ key, version: '2.0', plugins: ['AMap.PlaceSearch'] })
+  const placeSearch = new AMap.PlaceSearch({
+    city: trip.destination || undefined,
+    citylimit: !!trip.destination,
+    type: '住宿服务',
+    extensions: 'all',
+    pageSize: 18,
+    pageIndex: 1,
+  })
+  const keyword = `${trip.destination}${levelText(hotelLevel.value)}正规酒店 ${hotelKeyword.value}`.trim()
+  const groups = await Promise.allSettled(hotelSearchKeywords(trip.destination, keyword).map(word => new Promise<AmapPoi[]>((resolve, reject) => {
+    placeSearch.search(word, (status: string, res: AmapSearchResponse) => {
+      if (status === 'complete' && res?.poiList?.pois?.length) resolve(res.poiList.pois)
+      else reject(new Error(res?.info || '高德 JS 酒店搜索失败'))
     })
-  } finally {
-    loading.route = false
-  }
+  })))
+  const pois = sortRegularHotelPois(groups.flatMap(group => group.status === 'fulfilled' ? group.value : []))
+  return pois.slice(0, 3).map((poi, index) => hotelFromPoi(poi, index, trip.destination, hotelLevel.value, hotelKeyword.value))
 }
 
-async function runPitfall() {
-  loading.pitfall = true
+function fallbackHotels() {
+  return createFallbackHotels(trip.destination, hotelLevel.value)
+}
+
+function addPackingItem() {
+  const name = customPacking.name.trim()
+  if (!name) return
+  packingItems.push({ name, checked: true })
+  customPacking.name = ''
+}
+
+function addPurchaseItem() {
+  const name = customPurchase.name.trim()
+  if (!name) return
+  purchaseItems.push({ name, checked: true, price: Math.max(0, Math.round(customPurchase.price || 0)) })
+  customPurchase.name = ''
+  customPurchase.price = 0
+}
+
+async function saveToolPlan() {
+  if (!user.token) {
+    toast.warning('登录后可保存行程')
+    router.push('/login?redirect=/app/tools')
+    return
+  }
+  if (!trip.origin.trim() || !trip.destination.trim()) {
+    toast.warning('请先填写出发地和目的地')
+    currentStep.value = 0
+    return
+  }
+  savingPlan.value = true
   try {
-    answers.pitfall = await http.post('/api/ai/chat', {
-      message: `请给我${pitfall.destination}旅行避坑清单，玩法：${pitfall.preference}。按交通、住宿、美食、景点、天气、预约提醒输出。`,
-    }).then((res: any) => res.answer || res)
+    await http.post('/api/plans', {
+      title: planTitle(),
+      destination: `${trip.origin} → ${trip.destination}`,
+      budget: budget.value.total,
+      days: trip.days,
+      season: '已整理',
+      content: buildPlanContent(),
+    })
+    toast.success('已保存到行程')
+    router.push('/app/plans')
+  } catch (e) {
+    toast.error((e as Error).message || '保存失败，请稍后重试')
   } finally {
-    loading.pitfall = false
+    savingPlan.value = false
   }
 }
 
-async function runPacking() {
-  loading.packing = true
-  try {
-    answers.packing = await http.post('/api/ai/chat', {
-      message: `请生成${packing.destination}${packing.days}天旅行行李清单，人群：${packing.peopleType}，玩法：${packing.preference}。按证件、衣物、药品、电子设备、特殊物品输出。`,
-    }).then((res: any) => res.answer || res)
-  } finally {
-    loading.packing = false
-  }
+function planTitle() {
+  return createPlanTitle(trip)
 }
 
-function renderBudgetChart() {
-  if (!budgetChartRef.value) return
-  if (!budgetChart) budgetChart = echarts.init(budgetChartRef.value)
-  budgetChart.setOption({
-    color: ['#6f8398', '#4f8cff', '#34c759', '#ffb340', '#8b7cf6'],
-    tooltip: { trigger: 'item', formatter: '{b}<br/>￥{c} ({d}%)' },
-    series: [{
-      type: 'pie',
-      radius: ['45%', '70%'],
-      data: budgetResult.value.items,
-      label: { formatter: '{b}\n￥{c}' },
-    }],
+function buildPlanContent() {
+  return createPlanContent({
+    trip,
+    nights: nights.value,
+    budgetTotal: budget.value.total,
+    ticket: selectedTicket.value,
+    hotel: selectedHotel.value,
+    hotelPriceText: selectedHotel.value ? hotelPriceText(selectedHotel.value) : '未选择',
+    itinerary: itinerary.value,
+    packingItems: selectedPackingItems.value,
+    purchaseItems: selectedPurchaseItems.value,
   })
 }
 
-onMounted(runBudget)
-onBeforeUnmount(() => budgetChart?.dispose())
+function resetPackingItems() {
+  packingItems.splice(0, packingItems.length, ...defaultPackingItems())
+  purchaseItems.splice(0, purchaseItems.length, ...defaultPurchaseItems())
+}
+
+function openHotelDetail(hotel: HotelOption) {
+  detailHotel.value = hotel
+  hotelDetailVisible.value = true
+}
+
+function open12306(ticket = selectedTicket.value) {
+  const fromCode = stationCodes[trip.origin.trim()]
+  const toCode = stationCodes[trip.destination.trim()]
+  const date = dateText(trip.date)
+  if (fromCode && toCode) {
+    const fs = encodeURIComponent(`${trip.origin},${fromCode}`)
+    const ts = encodeURIComponent(`${trip.destination},${toCode}`)
+    window.open(`https://kyfw.12306.cn/otn/leftTicket/init?linktypeid=dc&fs=${fs}&ts=${ts}&date=${date}&flag=N,N,Y`, '_blank', 'noreferrer')
+    return
+  }
+  const keyword = encodeURIComponent(`${trip.origin} ${trip.destination} ${date} ${ticket?.trainNo || ''}`)
+  window.open(`https://www.12306.cn/index/?keyword=${keyword}`, '_blank', 'noreferrer')
+}
+
+function openHotelBooking(hotel = selectedHotel.value) {
+  if (!hotel) return
+  window.open(hotelBookingUrl(hotel, trip.destination), '_blank', 'noreferrer')
+}
+
+function openHotelNavigation(hotel: HotelOption) {
+  const anchor = transitAnchors[hotel.city] || { name: trip.destination, longitude: cityCoords[trip.destination]?.[0] || 0, latitude: cityCoords[trip.destination]?.[1] || 0 }
+  const from = `${anchor.longitude},${anchor.latitude},${encodeURIComponent(anchor.name)}`
+  const to = `${hotel.longitude},${hotel.latitude},${encodeURIComponent(hotel.name)}`
+  window.open(`https://uri.amap.com/navigation?from=${from}&to=${to}&mode=car&policy=1&src=travelmind&coordinate=gaode&callnative=0`, '_blank', 'noreferrer')
+}
+
+function hotelImage(hotel: HotelOption) {
+  return resolveHotelImage(hotel, hotelLevel.value)
+}
+
+function ensureHotelImage(e: Event, hotel: HotelOption) {
+  checkHotelImage(e, hotel, hotelLevel.value)
+}
+
+function fallbackHotelImage(e: Event, hotel: HotelOption) {
+  repairHotelImage(e, hotel, hotelLevel.value)
+}
+
+function hotelPriceText(hotel: Pick<HotelOption, 'name' | 'city' | 'price'>) {
+  return formatHotelPrice(hotel, trip.destination)
+}
+
 </script>

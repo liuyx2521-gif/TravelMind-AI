@@ -1,12 +1,19 @@
 <template>
-  <div class="flex min-h-screen items-center justify-center px-4">
-    <div class="liquid w-full max-w-sm rounded-[28px] p-6">
-      <h1 class="m-0 mb-5 text-2xl">创建账号</h1>
+  <div class="auth-shell flex min-h-screen items-center justify-center px-4">
+    <div class="auth-card liquid w-full max-w-sm rounded-[32px] p-6">
+      <div class="mb-5 flex items-center justify-between gap-3">
+        <div>
+          <span class="travel-sticker">新的旅程</span>
+          <h1 class="m-0 mt-3 text-2xl">创建账号</h1>
+        </div>
+        <div class="auth-icon">▧</div>
+      </div>
       <n-form>
         <n-form-item label="用户名"><n-input v-model:value="username" /></n-form-item>
-        <n-form-item label="邮箱"><n-input v-model:value="email" /></n-form-item>
-        <n-form-item label="密码"><n-input v-model:value="password" type="password" /></n-form-item>
+        <n-form-item label="邮箱"><n-input v-model:value="email" placeholder="name@example.com" /></n-form-item>
+        <n-form-item label="密码"><n-input v-model:value="password" type="password" placeholder="设置登录密码" /></n-form-item>
         <n-button type="primary" block round :loading="loading" @click="register">注册</n-button>
+        <router-link class="mt-4 block text-center text-sm text-[var(--primary)]" to="/login">已有账号，去登录</router-link>
       </n-form>
     </div>
   </div>

@@ -51,7 +51,10 @@ const mode = ref<'loading' | 'amap' | 'fallback'>('loading')
 const locationTip = ref('')
 const userLocation = ref<{ longitude: number; latitude: number }>()
 const title = computed(() => props.title || '目的地位置')
-const fallbackUrl = computed(() => `https://www.openstreetmap.org/?mlat=${props.latitude}&mlon=${props.longitude}#map=13/${props.latitude}/${props.longitude}`)
+const fallbackUrl = computed(() => {
+  const name = encodeURIComponent(title.value)
+  return `https://uri.amap.com/marker?position=${props.longitude},${props.latitude}&name=${name}&src=travelmind&coordinate=gaode&callnative=0`
+})
 const fallbackImage = computed(() => `https://staticmap.openstreetmap.de/staticmap.php?center=${props.latitude},${props.longitude}&zoom=13&size=900x420&markers=${props.latitude},${props.longitude},red-pushpin`)
 let map: any
 let AMapRef: any

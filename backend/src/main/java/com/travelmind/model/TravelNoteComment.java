@@ -14,6 +14,9 @@ public class TravelNoteComment {
     private Long id;
     private Long noteId;
     private Long userId;
+    private Long parentId;
+    private String username;
+    private String avatar;
     private String content;
     private LocalDateTime createTime;
 }

@@ -42,7 +42,7 @@
           <div class="p-4">
             <h3 class="m-0 cursor-pointer" @click="goHotelDetail(hotel)">{{ hotel.name }}</h3>
             <p class="text-sm text-[var(--muted)]">{{ hotel.address }}</p>
-            <div class="mt-2 flex justify-between text-sm"><span>￥{{ hotel.price }}</span><span>{{ hotel.score }} 分</span></div>
+            <div class="mt-2 flex justify-between text-sm"><span>{{ hotelPriceText(hotel) }}</span><span>{{ hotel.score }} 分</span></div>
             <div class="mt-3 flex gap-2">
               <n-button size="small" round @click="goHotelDetail(hotel)">详情</n-button>
               <n-button size="small" round @click="book(hotel)">预订</n-button>
@@ -60,9 +60,14 @@ import { useRoute, useRouter } from 'vue-router'
 import { useMessage } from 'naive-ui'
 import AmapView from '../components/AmapView.vue'
 import SocialRecommendations from '../components/SocialRecommendations.vue'
+import AMapLoader from '@amap/amap-jsapi-loader'
 import { http, type Attraction, type Hotel } from '../api'
+import { poiLatitude, poiLongitude, poiPhoto, type AmapPoi } from '../amapPoi'
 import { loadRealAttractionImages, realAttractionImage } from '../realAttractionImages'
 import { fallbackPlaceImage, placeImagePlaceholder } from '../imageFallback'
+import { hotelBookingUrl, hotelPriceText as formatHotelPrice, normalizeHotelPrice } from '../hotelPrice'
+import { hotelPoiStableId, hotelSearchKeywords, sortRegularHotelPois } from '../hotelSearch'
+import { fallbackHotels } from '../hotelPlanner'
 import { loadOnlineAttraction, saveOnlineHotel } from '../onlineDetail'
 import { removeFavoriteCard, saveFavoriteCard } from '../favoriteCache'
 
@@ -94,16 +99,98 @@ async function afterLoaded() {
 }
 
 async function loadOnlineHotels(city?: string) {
+  const keyword = city ? `${city} 正规酒店` : `${item.value?.name || ''} 附近正规酒店`
+  try {
+    const results = await http.get<Hotel[]>('/api/hotels/online', {
+      params: { city, keyword, limit: 12 },
+    })
+    const hotels = results.map((item, index) => ({
+      ...item,
+      price: normalizeHotelPrice(item.price, item, city || item.city, index),
+      cover: item.cover || placeImagePlaceholder(item),
+      source: 'online' as const,
+    }))
+    if (hotels.some(hotel => isRealHotelImage(hotel.cover))) return hotels
+  } catch {
+  }
+  const jsHotels = await searchHotelsByJs(city, keyword)
+  if (jsHotels.length) return jsHotels
+  try {
+    const fallback = await http.get<Hotel[]>('/api/hotels/nearby', { params: { city, limit: 6 } })
+    if (fallback.length) return fallback.map((item, index) => ({
+      ...item,
+      price: normalizeHotelPrice(item.price, item, city || item.city, index),
+      cover: item.cover || placeImagePlaceholder(item),
+    }))
+  } catch {
+  }
+  return fallbackHotelCards(city || item.value?.city || item.value?.name || '目的地')
+}
+
+async function searchHotelsByJs(city: string | undefined, keyword: string): Promise<Hotel[]> {
   const key = import.meta.env.VITE_AMAP_KEY
   if (!key) return []
   try {
-    const results = await http.get<Hotel[]>('/api/hotels/online', {
-      params: { city, keyword: city ? `${city}酒店` : '酒店', key, limit: 6 },
+    const securityJsCode = import.meta.env.VITE_AMAP_SECURITY_CODE
+    if (securityJsCode) (window as any)._AMapSecurityConfig = { securityJsCode }
+    const AMap = await AMapLoader.load({ key, version: '2.0', plugins: ['AMap.PlaceSearch'] })
+    const placeSearch = new AMap.PlaceSearch({
+      city: city || undefined,
+      citylimit: !!city,
+      type: '住宿服务',
+      extensions: 'all',
+      pageSize: 12,
+      pageIndex: 1,
     })
-    return results.map(item => ({ ...item, source: 'online' as const }))
+    const groups = await Promise.allSettled(hotelSearchKeywords(city || '', keyword).map(word => new Promise<AmapPoi[]>((resolve, reject) => {
+      placeSearch.search(word, (status: string, res: any) => {
+        if (status === 'complete' && res?.poiList?.pois?.length) resolve(res.poiList.pois)
+        else reject(new Error(res?.info || '高德酒店搜索失败'))
+      })
+    })))
+    return sortRegularHotelPois(groups.flatMap(group => group.status === 'fulfilled' ? group.value : []))
+      .filter(poi => poiPhoto(poi))
+      .slice(0, 6)
+      .map((poi, index) => ({
+        id: hotelPoiStableId(poi, index, city || ''),
+        name: poi.name || `${city || ''}酒店`,
+        city: poi.cityname || city || '',
+        address: poi.address || poi.type || '',
+        price: normalizeHotelPrice(poi.biz_ext?.cost, { name: poi.name || '', city: poi.cityname || city || '', price: 0 }, city || '', index),
+        score: Number(poi.biz_ext?.rating || 0),
+        cover: poiPhoto(poi),
+        longitude: poiLongitude(poi.location),
+        latitude: poiLatitude(poi.location),
+        source: 'online',
+      }))
   } catch {
     return []
   }
+}
+
+function isRealHotelImage(url?: string) {
+  return !!url && /^https?:\/\//i.test(url) && !url.includes('/v3/staticmap')
+}
+
+function fallbackHotelCards(city: string): Hotel[] {
+  return fallbackHotels(city, 'comfort').map((hotel, index) => ({
+    id: Number(`${Math.abs(cityHash(city))}${index + 1}`),
+    name: hotel.name,
+    city: hotel.city,
+    address: hotel.address || `${city}核心旅行区`,
+    price: hotel.price,
+    score: hotel.score,
+    cover: hotel.cover || placeImagePlaceholder(hotel),
+    longitude: hotel.longitude,
+    latitude: hotel.latitude,
+    source: 'online',
+  }))
+}
+
+function cityHash(value: string) {
+  let hash = 0
+  for (const char of value || 'hotel') hash = Math.imul(31, hash) + char.charCodeAt(0) | 0
+  return hash
 }
 
 function goHotelDetail(hotel: Hotel) {
@@ -112,8 +199,11 @@ function goHotelDetail(hotel: Hotel) {
 }
 
 function book(hotel: Hotel) {
-  const keyword = encodeURIComponent(hotel.name)
-  window.open(`https://hotels.ctrip.com/hotels/list?keyword=${keyword}`, '_blank', 'noreferrer')
+  window.open(hotelBookingUrl(hotel, item.value?.city), '_blank', 'noreferrer')
+}
+
+function hotelPriceText(hotel: Hotel) {
+  return formatHotelPrice(hotel, item.value?.city)
 }
 
 async function recordHistory() {

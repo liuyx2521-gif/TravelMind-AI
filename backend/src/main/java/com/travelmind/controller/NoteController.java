@@ -1,115 +1,89 @@
 package com.travelmind.controller;
 
-import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.travelmind.common.PageResp;
 import com.travelmind.common.Result;
-import com.travelmind.mapper.TravelNoteCommentMapper;
-import com.travelmind.mapper.TravelNoteMapper;
+import com.travelmind.dto.CommentReq;
+import com.travelmind.dto.CommentView;
 import com.travelmind.model.TravelNote;
-import com.travelmind.model.TravelNoteComment;
-import com.travelmind.security.LoginUser;
+import com.travelmind.service.NoteService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
-import java.time.LocalDateTime;
-
-import static com.baomidou.mybatisplus.core.toolkit.Wrappers.lambdaQuery;
-import static com.baomidou.mybatisplus.core.toolkit.Wrappers.lambdaUpdate;
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/notes")
 @RequiredArgsConstructor
 public class NoteController {
-    private final TravelNoteMapper mapper;
-    private final TravelNoteCommentMapper commentMapper;
+    private final NoteService noteService;
 
     @GetMapping
     public Result<PageResp<TravelNote>> page(@RequestParam(defaultValue = "1") long page,
                                              @RequestParam(defaultValue = "20") long size,
                                              @RequestParam(required = false) String keyword) {
-        return Result.ok(PageResp.of(mapper.selectPage(Page.of(page, size),
-                lambdaQuery(TravelNote.class)
-                        .and(keyword != null && !keyword.isBlank(), q -> q
-                                .like(TravelNote::getTitle, keyword)
-                                .or()
-                                .like(TravelNote::getContent, keyword))
-                        .orderByDesc(TravelNote::getCreateTime))));
+        return Result.ok(noteService.page(page, size, keyword));
     }
 
     @GetMapping("/mine")
     public Result<PageResp<TravelNote>> mine(@RequestParam(defaultValue = "1") long page,
                                              @RequestParam(defaultValue = "20") long size) {
-        return Result.ok(PageResp.of(mapper.selectPage(Page.of(page, size),
-                lambdaQuery(TravelNote.class)
-                        .eq(TravelNote::getUserId, LoginUser.id())
-                        .orderByDesc(TravelNote::getCreateTime))));
+        return Result.ok(noteService.mine(page, size));
     }
 
     @GetMapping("/{id}")
     public Result<TravelNote> detail(@PathVariable Long id) {
-        mapper.update(null, lambdaUpdate(TravelNote.class).eq(TravelNote::getId, id)
-                .setSql("view_count = view_count + 1"));
-        return Result.ok(mapper.selectById(id));
+        return Result.ok(noteService.detail(id));
     }
 
     @PostMapping
     public Result<TravelNote> create(@RequestBody TravelNote note) {
-        note.setUserId(LoginUser.id());
-        note.setViewCount(0);
-        note.setLikeCount(0);
-        if ((note.getCover() == null || note.getCover().isBlank()) && note.getImages() != null && !note.getImages().isBlank()) {
-            var first = note.getImages().replace("[", "").replace("]", "").replace("\"", "").split(",", 2)[0].trim();
-            if (!first.isBlank()) note.setCover(first);
-        }
-        mapper.insert(note);
-        return Result.ok(note);
+        return Result.ok(noteService.create(note));
     }
 
     @PostMapping("/{id}/like")
     public Result<Void> like(@PathVariable Long id) {
-        mapper.update(null, lambdaUpdate(TravelNote.class).eq(TravelNote::getId, id)
-                .setSql("like_count = like_count + 1"));
+        noteService.like(id);
         return Result.ok();
     }
 
     @DeleteMapping("/{id}")
     public Result<Void> delete(@PathVariable Long id) {
-        deleteByOwner(id);
+        noteService.delete(id);
         return Result.ok();
     }
 
     @PostMapping("/{id}/delete")
     public Result<Void> deleteByPost(@PathVariable Long id) {
-        deleteByOwner(id);
+        noteService.delete(id);
         return Result.ok();
     }
 
-    private void deleteByOwner(Long id) {
-        var note = mapper.selectById(id);
-        if (note == null) return;
-        if (!note.getUserId().equals(LoginUser.id())) {
-            throw new IllegalArgumentException("只能删除自己发布的游记");
-        }
-        commentMapper.delete(lambdaQuery(TravelNoteComment.class).eq(TravelNoteComment::getNoteId, id));
-        mapper.deleteById(id);
-    }
-
     @GetMapping("/{id}/comments")
-    public Result<?> comments(@PathVariable Long id) {
-        return Result.ok(commentMapper.selectList(lambdaQuery(TravelNoteComment.class)
-                .eq(TravelNoteComment::getNoteId, id)
-                .orderByDesc(TravelNoteComment::getCreateTime)));
+    public Result<List<CommentView>> comments(@PathVariable Long id) {
+        return Result.ok(noteService.comments(id));
     }
 
     @PostMapping("/{id}/comments")
-    public Result<TravelNoteComment> comment(@PathVariable Long id, @RequestBody TravelNoteComment comment) {
-        if (comment.getContent() == null || comment.getContent().isBlank()) {
-            throw new IllegalArgumentException("评论不能为空");
-        }
-        comment.setNoteId(id);
-        comment.setUserId(LoginUser.id());
-        comment.setCreateTime(LocalDateTime.now());
-        commentMapper.insert(comment);
-        return Result.ok(comment);
+    public Result<CommentView> comment(@PathVariable Long id, @RequestBody CommentReq req) {
+        return Result.ok(noteService.createComment(id, req));
+    }
+
+    @PutMapping("/{noteId}/comments/{commentId}")
+    public Result<CommentView> updateComment(@PathVariable Long noteId,
+                                             @PathVariable Long commentId,
+                                             @RequestBody CommentReq req) {
+        return Result.ok(noteService.updateComment(noteId, commentId, req));
+    }
+
+    @DeleteMapping("/{noteId}/comments/{commentId}")
+    public Result<Void> deleteComment(@PathVariable Long noteId, @PathVariable Long commentId) {
+        noteService.deleteComment(noteId, commentId);
+        return Result.ok();
+    }
+
+    @PostMapping("/{noteId}/comments/{commentId}/delete")
+    public Result<Void> deleteCommentByPost(@PathVariable Long noteId, @PathVariable Long commentId) {
+        noteService.deleteComment(noteId, commentId);
+        return Result.ok();
     }
 }

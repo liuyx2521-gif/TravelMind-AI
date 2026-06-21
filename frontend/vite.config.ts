@@ -15,4 +15,17 @@ export default defineConfig({
       '/uploads': { target: 'http://localhost:8081', changeOrigin: true },
     },
   },
+  build: {
+    chunkSizeWarningLimit: 1500,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vendor-vue': ['vue', 'vue-router', 'pinia'],
+          'vendor-ui': ['naive-ui'],
+          'vendor-chart': ['echarts'],
+          'vendor-map': ['@amap/amap-jsapi-loader'],
+        },
+      },
+    },
+  },
 })

@@ -20,7 +20,6 @@
 
     <section v-if="!loggedIn" class="liquid rounded-[28px] p-5">
       <h2 class="m-0 text-2xl">游客模式</h2>
-      <p class="m-0 mt-2 leading-7 text-[var(--muted)]">你可以继续浏览景点、酒店、游记和 AI 推荐。收藏、浏览历史、头像资料和行程保存需要登录后才可以使用。</p>
     </section>
 
     <section v-if="loggedIn" class="liquid rounded-[28px] p-5">
@@ -31,7 +30,7 @@
         </div>
         <n-button size="small" round @click="router.push('/app/notes')">去社区</n-button>
       </div>
-      <div v-if="myNotes.length" class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+      <div v-if="myNotes.length" class="grid max-h-[560px] grid-cols-2 gap-3 overflow-y-auto pr-1 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
         <article v-for="note in myNotes" :key="note.id" class="group cursor-pointer overflow-hidden rounded-[18px] bg-white/45 transition hover:-translate-y-1 dark:bg-white/6" @click="router.push(`/app/notes/${note.id}`)">
           <div class="aspect-[3/4] overflow-hidden bg-black/8">
             <img :src="noteCover(note)" :alt="note.title" class="h-full w-full object-cover transition duration-300 group-hover:scale-105" @error="fallbackCardImage" />
@@ -52,7 +51,7 @@
           <p class="m-0 mt-1 text-sm text-[var(--muted)]">{{ favoriteCards.length }} 个收藏</p>
         </div>
       </div>
-      <div v-if="favoriteCards.length" class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+      <div v-if="favoriteCards.length" class="grid max-h-[560px] grid-cols-2 gap-3 overflow-y-auto pr-1 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
         <article v-for="item in favoriteCards" :key="item.key" class="group cursor-pointer overflow-hidden rounded-[18px] bg-white/45 transition hover:-translate-y-1 dark:bg-white/6" @click="openCard(item)">
           <div class="aspect-[3/4] overflow-hidden bg-black/8">
             <img :src="item.cover" :alt="item.title" class="h-full w-full object-cover transition duration-300 group-hover:scale-105" @error="fallbackCardImage" />
@@ -77,7 +76,7 @@
         </div>
         <n-button v-if="historyCards.length" size="small" round @click="clearHistory">清空</n-button>
       </div>
-      <div v-if="historyCards.length" class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
+      <div v-if="historyCards.length" class="grid max-h-[460px] grid-cols-2 gap-3 overflow-y-auto pr-1 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
         <article v-for="item in historyCards" :key="item.key" class="group cursor-pointer overflow-hidden rounded-[18px] bg-white/45 transition hover:-translate-y-1 dark:bg-white/6" @click="openCard(item)">
           <div class="aspect-square overflow-hidden bg-black/8">
             <img :src="item.cover" :alt="item.title" class="h-full w-full object-cover transition duration-300 group-hover:scale-105" @error="fallbackCardImage" />
@@ -94,7 +93,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useMessage } from 'naive-ui'
 import { http, type Note, type PageResp } from '../api'
@@ -186,6 +185,13 @@ async function toFavoriteCard(item: any): Promise<CardItem | undefined> {
       return card(item, data.title, data.cover, `${data.likeCount || 0}赞`, '/app/notes')
     }
   } catch {}
+  return card(
+    item,
+    `${typeLabel(item.targetType)} #${item.targetId}`,
+    fallbackByType(item.targetType),
+    '',
+    pathByType(item.targetType, item.targetId) || '',
+  )
 }
 
 function loadHistoryCards() {
@@ -244,6 +250,47 @@ function fallbackCardImage(e: Event) {
   ;(e.target as HTMLImageElement).src = cardFallback
 }
 
+async function loadProfileData() {
+  if (!user.token) {
+    favorites.value = []
+    history.value = []
+    favoriteCards.value = []
+    historyCards.value = []
+    myNotes.value = []
+    return
+  }
+
+  try {
+    await user.fetchMe()
+    avatarVersion.value = Date.now()
+  } catch (e) {
+    toast.error((e as Error).message || '获取用户信息失败')
+  }
+
+  try {
+    const notePage = await http.get<PageResp<Note & { images?: string }>>('/api/notes/mine', { params: { size: 30 } })
+    myNotes.value = notePage.records
+  } catch {
+    myNotes.value = []
+  }
+
+  try {
+    await loadFavorites()
+  } catch (e) {
+    favoriteCards.value = []
+    toast.error((e as Error).message || '收藏加载失败')
+  }
+
+  try {
+    history.value = await http.get('/api/history')
+    loadHistoryCards()
+  } catch (e) {
+    history.value = []
+    historyCards.value = []
+    toast.error((e as Error).message || '浏览历史加载失败')
+  }
+}
+
 function noteCover(note: Note & { images?: string }) {
   return note.cover || noteImages(note)[0] || placeImagePlaceholder({ title: note.title })
 }
@@ -272,14 +319,6 @@ async function clearHistory() {
   historyCards.value = []
 }
 
-onMounted(async () => {
-  if (!user.token) return
-  await user.fetchMe()
-  avatarVersion.value = Date.now()
-  const notePage = await http.get<PageResp<Note & { images?: string }>>('/api/notes/mine', { params: { size: 30 } })
-  myNotes.value = notePage.records
-  await loadFavorites()
-  history.value = await http.get('/api/history')
-  loadHistoryCards()
-})
+watch(() => user.token, loadProfileData)
+onMounted(loadProfileData)
 </script>

@@ -14,7 +14,7 @@
           </div>
         </div>
         <div class="mt-5 grid gap-3 md:grid-cols-3">
-          <div class="rounded-2xl bg-white/45 p-4 dark:bg-white/6">参考价：￥{{ item.price }}</div>
+          <div class="rounded-2xl bg-white/45 p-4 dark:bg-white/6">价格：{{ priceText(item) }}</div>
           <div class="rounded-2xl bg-white/45 p-4 dark:bg-white/6">城市：{{ item.city }}</div>
           <div class="rounded-2xl bg-white/45 p-4 dark:bg-white/6">评分：{{ item.score }}</div>
         </div>
@@ -54,6 +54,7 @@ import AmapView from '../components/AmapView.vue'
 import SocialRecommendations from '../components/SocialRecommendations.vue'
 import { http, type Hotel } from '../api'
 import { fallbackPlaceImage, placeImagePlaceholder } from '../imageFallback'
+import { hotelBookingUrl, hotelPriceText } from '../hotelPrice'
 import { loadOnlineHotel } from '../onlineDetail'
 import { removeFavoriteCard, saveFavoriteCard } from '../favoriteCache'
 
@@ -63,8 +64,9 @@ const item = ref<Hotel>()
 const favorited = ref(false)
 const bookingLinks = computed(() => {
   if (!item.value) return []
-  const keyword = encodeURIComponent(item.value.name)
+  const keyword = encodeURIComponent(`${item.value.city || ''} ${item.value.name}`.trim())
   return [
+    { name: '当前酒店实时价', url: hotelBookingUrl(item.value) },
     { name: '携程搜索', url: `https://hotels.ctrip.com/hotels/list?keyword=${keyword}` },
     { name: '飞猪搜索', url: `https://s.fliggy.com/hotel?searchText=${keyword}` },
     { name: '美团搜索', url: `https://www.meituan.com/s/${keyword}` },
@@ -142,5 +144,9 @@ function fallbackImage(e: Event, item: Hotel) {
   item.cover = placeImagePlaceholder(item)
   fallbackPlaceImage(e, item)
   void recordHistory()
+}
+
+function priceText(item: Hotel) {
+  return hotelPriceText(item)
 }
 </script>

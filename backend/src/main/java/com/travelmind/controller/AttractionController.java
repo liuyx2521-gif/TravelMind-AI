@@ -3,19 +3,15 @@ package com.travelmind.controller;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.travelmind.common.PageResp;
 import com.travelmind.common.Result;
-import com.travelmind.config.AppProperties;
 import com.travelmind.mapper.AttractionMapper;
 import com.travelmind.model.Attraction;
+import com.travelmind.service.AmapPoiService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.client.RestClient;
 
-import java.math.BigDecimal;
 import java.time.Month;
 import java.time.LocalDate;
 import java.util.List;
-import java.util.Map;
-import java.util.Optional;
 
 import static com.baomidou.mybatisplus.core.toolkit.Wrappers.lambdaQuery;
 
@@ -24,8 +20,7 @@ import static com.baomidou.mybatisplus.core.toolkit.Wrappers.lambdaQuery;
 @RequiredArgsConstructor
 public class AttractionController {
     private final AttractionMapper mapper;
-    private final AppProperties properties;
-    private final RestClient restClient = RestClient.create();
+    private final AmapPoiService amapPoiService;
 
     @GetMapping
     public Result<PageResp<Attraction>> page(String keyword, String city, String tag,
@@ -56,29 +51,7 @@ public class AttractionController {
     public Result<List<Attraction>> online(String keyword, String city,
                                            @RequestParam(defaultValue = "20") int limit,
                                            @RequestParam(required = false) String key) {
-        var amapKey = Optional.ofNullable(key)
-                .filter(x -> !x.isBlank())
-                .or(() -> Optional.ofNullable(properties.amap()).map(AppProperties.Amap::key).filter(x -> !x.isBlank()))
-                .orElseThrow(() -> new IllegalArgumentException("缺少高德 AMAP_KEY"));
-        var query = keyword == null || keyword.isBlank() ? "旅游景点" : keyword;
-        var body = restClient.get()
-                .uri(uri -> uri.scheme("https")
-                        .host("restapi.amap.com")
-                        .path("/v5/place/text")
-                        .queryParam("key", amapKey)
-                        .queryParam("keywords", query)
-                        .queryParam("region", city == null ? "" : city)
-                        .queryParam("city_limit", city != null && !city.isBlank())
-                        .queryParam("show_fields", "photos,business")
-                        .queryParam("page_size", Math.min(limit, 25))
-                        .build())
-                .retrieve()
-                .body(Map.class);
-        if (!"1".equals(String.valueOf(body.get("status")))) {
-            throw new IllegalArgumentException(String.valueOf(body.getOrDefault("info", "高德联网搜索失败")));
-        }
-        var pois = (List<Map<String, Object>>) body.getOrDefault("pois", List.of());
-        return Result.ok(pois.stream().map(this::toOnlineAttraction).toList());
+        return Result.ok(amapPoiService.searchAttractions(keyword, city, limit, key));
     }
 
     @GetMapping("/hot")
@@ -114,50 +87,6 @@ public class AttractionController {
         if (List.of(Month.JUNE, Month.JULY, Month.AUGUST).contains(month)) return "夏";
         if (List.of(Month.SEPTEMBER, Month.OCTOBER, Month.NOVEMBER).contains(month)) return "秋";
         return "冬";
-    }
-
-    private Attraction toOnlineAttraction(Map<String, Object> poi) {
-        var item = new Attraction();
-        item.setId(Math.abs((long) String.valueOf(poi.get("id")).hashCode()));
-        item.setName(text(poi, "name"));
-        item.setProvince(text(poi, "pname"));
-        item.setCity(Optional.of(text(poi, "cityname")).filter(x -> !x.isBlank()).orElse(text(poi, "adname")));
-        item.setDescription(Optional.of(text(poi, "address")).filter(x -> !x.isBlank()).orElse(text(poi, "type")));
-        item.setOpenTime("联网结果");
-        item.setBestSeason("全年");
-        item.setTags(text(poi, "type"));
-        item.setPrice(BigDecimal.ZERO);
-        var business = (Map<?, ?>) poi.get("business");
-        var rating = Optional.ofNullable(business == null ? null : business.get("rating"))
-                .map(String::valueOf)
-                .filter(x -> !x.isBlank() && !"[]".equals(x))
-                .map(BigDecimal::new)
-                .orElse(BigDecimal.ZERO);
-        item.setScore(rating);
-        var location = text(poi, "location").split(",");
-        if (location.length == 2) {
-            item.setLongitude(new BigDecimal(location[0]));
-            item.setLatitude(new BigDecimal(location[1]));
-        }
-        item.setCoverImage(photo(poi).orElseGet(() -> staticMap(text(poi, "location"))));
-        return item;
-    }
-
-    private String staticMap(String location) {
-        var key = Optional.ofNullable(properties.amap()).map(AppProperties.Amap::key).orElse("");
-        return location == null || location.isBlank() || key.isBlank()
-                ? ""
-                : "https://restapi.amap.com/v3/staticmap?location=" + location + "&zoom=13&size=600*320&markers=mid,,A:" + location + "&key=" + key;
-    }
-
-    private Optional<String> photo(Map<String, Object> poi) {
-        var photos = (List<Map<String, Object>>) poi.getOrDefault("photos", List.of());
-        return photos.stream().map(x -> String.valueOf(x.get("url"))).filter(x -> !x.isBlank() && !"null".equals(x)).findFirst();
-    }
-
-    private String text(Map<String, Object> map, String key) {
-        var value = map.get(key);
-        return value == null || "[]".equals(String.valueOf(value)) ? "" : String.valueOf(value);
     }
 
     private List<String> foreignCountries() {

@@ -1,0 +1,15 @@
+{
+  "name": "travelmind-ai-backend",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Spring Boot backend for TravelMind AI",
+  "scripts": {
+    "build": "mvn -B -DskipTests package",
+    "vercel-build": "mvn -B -DskipTests package",
+    "dev": "mvn spring-boot:run",
+    "start": "java -jar target/travelmind-ai-1.0.0.jar"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

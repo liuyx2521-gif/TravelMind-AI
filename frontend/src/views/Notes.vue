@@ -35,11 +35,60 @@
         <h2 class="m-0 text-2xl">评论</h2>
         <n-button round @click="like(current)">点赞 {{ current.likeCount }}</n-button>
       </div>
-      <div class="space-y-3">
-        <p v-for="item in comments" :key="item.id" class="m-0 rounded-2xl bg-white/45 p-3 dark:bg-white/8">
-          {{ item.content }}
-        </p>
+      <div class="max-h-[520px] space-y-3 overflow-y-auto pr-1">
+        <article
+          v-for="item in rootComments"
+          :key="item.id"
+          class="rounded-2xl bg-white/45 p-3 dark:bg-white/8"
+          @contextmenu.prevent="requestDeleteComment(item)"
+        >
+          <div class="flex items-start gap-3">
+            <n-avatar round :size="38" :src="commentAvatar(item)">
+              {{ avatarText(item) }}
+            </n-avatar>
+            <div class="min-w-0 flex-1">
+              <div class="flex flex-wrap items-center gap-2">
+                <span class="font-700">{{ commentName(item) }}</span>
+                <span class="text-xs text-[var(--muted)]">{{ formatTime(item.createTime) }}</span>
+                <div class="ml-auto flex gap-1">
+                  <n-button size="tiny" quaternary @click="replyTo(item)">回复</n-button>
+                </div>
+              </div>
+              <p class="m-0 mt-1 whitespace-pre-wrap break-words leading-6">{{ item.content }}</p>
+            </div>
+          </div>
+          <div v-if="threadReplies(item).length" class="mt-3 space-y-2 border-l border-white/35 pl-4 dark:border-white/10">
+            <article
+              v-for="reply in threadReplies(item)"
+              :key="reply.id"
+              class="rounded-2xl bg-white/40 p-3 dark:bg-white/6"
+              :style="{ marginLeft: `${Math.min(reply.level, 2) * 14}px` }"
+              @contextmenu.prevent="requestDeleteComment(reply)"
+            >
+              <div class="flex items-start gap-3">
+                <n-avatar round :size="30" :src="commentAvatar(reply)">
+                  {{ avatarText(reply) }}
+                </n-avatar>
+                <div class="min-w-0 flex-1">
+                  <div class="flex flex-wrap items-center gap-2">
+                    <span class="font-700">{{ commentName(reply) }}</span>
+                    <span class="text-xs text-[var(--muted)]">{{ formatTime(reply.createTime) }}</span>
+                    <div class="ml-auto flex gap-1">
+                      <n-button size="tiny" quaternary @click="replyTo(reply)">回复</n-button>
+                    </div>
+                  </div>
+                  <div v-if="reply.replyToUserId" class="mt-1 text-xs text-[var(--muted)]">回复 @{{ replyName(reply) }}</div>
+                  <p class="m-0 mt-1 whitespace-pre-wrap break-words leading-6">{{ reply.content }}</p>
+                </div>
+              </div>
+            </article>
+          </div>
+        </article>
         <div v-if="!comments.length" class="rounded-2xl bg-white/35 p-4 text-center text-[var(--muted)] dark:bg-white/6">还没有评论</div>
+      </div>
+      <div v-if="replyTarget" class="mt-4 flex items-center justify-between gap-3 rounded-2xl bg-white/45 px-3 py-2 text-sm dark:bg-white/8">
+        <span class="text-[var(--muted)]">回复 @{{ commentName(replyTarget) }}</span>
+        <n-button size="tiny" quaternary @click="clearReply">取消</n-button>
       </div>
       <div class="mt-4 flex items-end gap-3">
         <n-input v-model:value="comment" type="textarea" :autosize="{ minRows: 1, maxRows: 4 }" placeholder="写评论" />
@@ -53,7 +102,6 @@
       <div class="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 class="m-0 text-3xl">旅行社区</h1>
-          <p class="m-0 mt-2 text-[var(--muted)]">看看大家真实分享的路线、照片和避坑经验，也可以发布自己的旅行灵感。</p>
         </div>
         <div class="flex w-full gap-2 md:w-[420px]">
           <n-input v-model:value="keyword" round clearable placeholder="搜索目的地、玩法、美食..." @keyup.enter="loadList" />
@@ -119,6 +167,7 @@ import { useUserStore } from '../stores/user'
 
 type UploadResp = { url: string }
 type NoteWithImages = Note & { images?: string }
+type ThreadComment = Comment & { level: number }
 
 const toast = useMessage()
 const route = useRoute()
@@ -131,9 +180,18 @@ const comment = ref('')
 const commenting = ref(false)
 const publishing = ref(false)
 const deletingId = ref<number>()
+const deletingCommentId = ref<number>()
+const avatarVersion = ref(Date.now())
+const replyTarget = ref<Comment>()
 const form = reactive({ title: '', content: '', images: [] as string[] })
 const detailMode = computed(() => !!route.params.id)
 const keyword = ref('')
+const rootComments = computed(() => comments.value.filter(item => !item.parentId).sort(sortNewest))
+const repliesByParent = computed(() => comments.value.reduce<Record<number, Comment[]>>((map, item) => {
+  if (!item.parentId) return map
+  map[item.parentId] = [...(map[item.parentId] || []), item].sort(sortOldest)
+  return map
+}, {}))
 
 function notePlaceholder(title: string) {
   return placeImagePlaceholder({ title })
@@ -155,6 +213,58 @@ function imagesOf(note: NoteWithImages) {
 
 function coverOf(note: NoteWithImages) {
   return note.cover || imagesOf(note)[0] || notePlaceholder(note.title)
+}
+
+function avatarText(item: Comment) {
+  return commentName(item).slice(0, 1).toUpperCase()
+}
+
+function commentName(item: Comment) {
+  const name = (item.username || '').trim()
+  return name && !/^用户\s*#?\s*\d+$/i.test(name) ? name : `ID ${item.userId || '-'}`
+}
+
+function replyName(item: Comment) {
+  const name = (item.replyToUsername || '').trim()
+  return name && !/^用户\s*#?\s*\d+$/i.test(name) ? name : `ID ${item.replyToUserId || '-'}`
+}
+
+function commentAvatar(item: Comment) {
+  const url = Number(item.userId) === Number(user.user?.id) ? user.user?.avatar || item.avatar : item.avatar
+  if (!url) return undefined
+  const version = Number(item.userId) === Number(user.user?.id) ? avatarVersion.value : 1
+  return `${url}${url.includes('?') ? '&' : '?'}t=${version}`
+}
+
+function formatTime(value?: string) {
+  if (!value) return ''
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value.replace('T', ' ').slice(0, 16)
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
+}
+
+function sortNewest(a: Comment, b: Comment) {
+  return timeValue(b.createTime) - timeValue(a.createTime)
+}
+
+function sortOldest(a: Comment, b: Comment) {
+  return timeValue(a.createTime) - timeValue(b.createTime)
+}
+
+function timeValue(value?: string) {
+  return value ? new Date(value).getTime() || 0 : 0
+}
+
+function threadReplies(root: Comment) {
+  const result: ThreadComment[] = []
+  const walk = (parentId: number, level: number) => {
+    for (const item of repliesByParent.value[parentId] || []) {
+      result.push({ ...item, level })
+      walk(item.id, level + 1)
+    }
+  }
+  walk(root.id, 1)
+  return result
 }
 
 async function loadList() {
@@ -236,6 +346,10 @@ function isMine(note: NoteWithImages) {
   return !!user.user?.id && Number(note.userId) === Number(user.user.id)
 }
 
+function isMyComment(item: Comment) {
+  return !!user.user?.id && Number(item.userId) === Number(user.user.id)
+}
+
 async function deleteNote(note: NoteWithImages) {
   if (!user.token) {
     toast.warning('登录后才可以删除游记')
@@ -258,20 +372,57 @@ async function deleteNote(note: NoteWithImages) {
   }
 }
 
+function replyTo(item: Comment) {
+  if (!user.token) {
+    toast.warning('登录后才可以回复')
+    return
+  }
+  replyTarget.value = item
+}
+
+function clearReply() {
+  replyTarget.value = undefined
+}
+
+async function requestDeleteComment(item: Comment) {
+  if (!isMyComment(item)) return
+  if (!window.confirm('删除这条评论？')) return
+  await deleteComment(item)
+}
+
+async function deleteComment(item: Comment) {
+  if (!current.value) return
+  deletingCommentId.value = item.id
+  try {
+    await http.delete(`/api/notes/${current.value.id}/comments/${item.id}`)
+    const ids = new Set([item.id, ...threadReplies(item).map(reply => reply.id)])
+    comments.value = comments.value.filter(comment => !ids.has(comment.id))
+  } catch (e) {
+    toast.error((e as Error).message || '评论删除失败')
+  } finally {
+    deletingCommentId.value = undefined
+  }
+}
+
 async function sendComment() {
   if (!user.token) {
     toast.warning('登录后才可以评论')
     return
   }
+  if (!user.user) await user.fetchMe()
   if (!current.value || !comment.value.trim()) {
     toast.warning('评论不能为空')
     return
   }
   commenting.value = true
   try {
-    await http.post(`/api/notes/${current.value.id}/comments`, { content: comment.value.trim() })
+    const saved = await http.post<Comment>(`/api/notes/${current.value.id}/comments`, {
+      content: comment.value.trim(),
+      parentId: replyTarget.value?.id,
+    })
     comment.value = ''
-    comments.value = await http.get<Comment[]>(`/api/notes/${current.value.id}/comments`)
+    replyTarget.value = undefined
+    comments.value = [saved, ...comments.value]
   } catch (e) {
     toast.error((e as Error).message || '请先登录后评论')
   } finally {
@@ -280,8 +431,14 @@ async function sendComment() {
 }
 
 watch(() => route.params.id, loadDetail)
+watch(() => user.user?.avatar, () => {
+  avatarVersion.value = Date.now()
+})
 onMounted(async () => {
-  if (user.token && !user.user) await user.fetchMe()
+  if (user.token) {
+    await user.fetchMe()
+    avatarVersion.value = Date.now()
+  }
   await loadDetail()
 })
 </script>

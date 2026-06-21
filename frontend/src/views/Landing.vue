@@ -16,7 +16,6 @@
 
     <section class="landing-hero">
       <h1>TravelMind AI</h1>
-      <p>想旅行，但不想被攻略、预算和路线绕晕？把出发地、天数、预算和想玩的感觉告诉我，我来陪你挑目的地、算花费、找酒店，把每天怎么玩聊成一份清清楚楚的行程。</p>
       <div class="landing-actions">
         <n-button type="primary" round size="large" @click="enterAsGuest">游客进入</n-button>
         <n-button round size="large" @click="goLogin">登录</n-button>

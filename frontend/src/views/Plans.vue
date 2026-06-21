@@ -7,7 +7,7 @@
           <h1 class="m-0 text-3xl">{{ current.title }}</h1>
           <p class="m-0 mt-2 text-[var(--muted)]">{{ current.destination }} · {{ current.days }}天 · ￥{{ current.budget }}</p>
         </div>
-        <div class="rounded-2xl bg-white/50 px-4 py-2 text-sm dark:bg-white/10">{{ current.season || 'AI整理' }}</div>
+        <div class="rounded-2xl bg-white/50 px-4 py-2 text-sm dark:bg-white/10">{{ current.season || '已整理' }}</div>
       </div>
     </section>
 
@@ -39,7 +39,7 @@
           <div ref="chartRef" class="h-[260px]"></div>
         </section>
         <section class="liquid rounded-[28px] p-5">
-          <h2 class="m-0 mb-3 text-xl">AI 原始建议</h2>
+          <h2 class="m-0 mb-3 text-xl">完整行程</h2>
           <pre class="max-h-[360px] overflow-auto whitespace-pre-wrap font-sans text-sm leading-7 text-[var(--muted)]">{{ current.content }}</pre>
         </section>
       </aside>
@@ -63,8 +63,7 @@
   </div>
 
   <div v-else-if="!loggedIn" class="liquid rounded-[28px] p-6 text-center">
-    <h1 class="m-0 text-2xl">登录后才可以使用行程功能</h1>
-    <p class="mx-auto mt-3 max-w-xl leading-7 text-[var(--muted)]">游客可以先和 AI 聊旅行方案，也可以浏览景点和酒店。登录后，我会帮你保存每一份行程，并在这里整理成可点击的卡片和流程图。</p>
+    <h1 class="m-0 text-2xl">登录后可保存行程</h1>
     <div class="mt-5 flex justify-center gap-3">
       <n-button type="primary" round @click="router.push('/login?redirect=/app/plans')">去登录</n-button>
       <n-button round @click="router.push('/register')">注册账号</n-button>
@@ -80,12 +79,10 @@
     >
       <div class="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h2 class="m-0 text-2xl">{{ plan.title }}</h2>
-          <p class="m-0 mt-2 text-[var(--muted)]">{{ plan.destination || inferDestination(plan) }} · {{ plan.days || inferDays(plan) }}天</p>
+          <h2 class="m-0 text-2xl">{{ listTitle(plan) }}</h2>
         </div>
-        <div class="rounded-2xl bg-white/50 px-4 py-2 text-sm font-700 dark:bg-white/10">￥{{ plan.budget || 0 }}</div>
+        <div class="rounded-2xl bg-white/50 px-4 py-2 text-sm font-700 dark:bg-white/10">查看详情</div>
       </div>
-      <p class="m-0 mt-4 line-clamp-2 text-sm text-[var(--muted)]">{{ plan.content }}</p>
     </article>
     <n-empty v-if="!plans.length" description="暂无行程" />
   </div>
@@ -98,7 +95,7 @@ import * as echarts from 'echarts'
 import { http, type Plan } from '../api'
 import { useUserStore } from '../stores/user'
 
-type FlowType = 'transport' | 'attraction' | 'food' | 'hotel'
+type FlowType = 'attraction' | 'food' | 'hotel'
 type FlowNode = {
   type: FlowType
   icon: string
@@ -146,20 +143,20 @@ function parsePlanDays(plan?: Plan): DayPlan[] {
         text: content.slice((match.index || 0) + match[0].length, matches[index + 1]?.index ?? content.length).trim(),
       }))
     : Array.from({ length: Math.max(1, plan?.days || 1) }, (_, index) => ({ title: `Day ${index + 1}`, text: content }))
-  return sections.map(section => ({ ...section, nodes: buildNodes(section.text) }))
+  const hotel = hotelInfo(plan)
+  return sections.map(section => ({ ...section, nodes: buildNodes(section.text, hotel) }))
 }
 
-function buildNodes(text: string): FlowNode[] {
+function buildNodes(text: string, hotel: string): FlowNode[] {
   return [
-    node('transport', iconForTransport(text), pickLine(text, /交通|高铁|飞机|航班|地铁|公交|打车|抵达|出发/), text),
-    node('attraction', iconForAttraction(text), pickLine(text, /景点|打卡|游览|海滩|古镇|山|公园|博物馆/), text),
-    node('food', '🍜', pickLine(text, /美食|餐|小吃|海鲜|午餐|晚餐|咖啡/), text),
-    node('hotel', '🏨', pickLine(text, /酒店|住宿|入住|民宿|休息/), text),
+    node('attraction', iconForAttraction(text), extractPlanLine(text, /景点|打卡|游览|海滩|古镇|山|公园|博物馆|景区/), text),
+    node('food', '🍜', extractPlanLine(text, /美食|餐|小吃|海鲜|午餐|晚餐|咖啡|夜市/), text),
+    node('hotel', '🏨', hotel || extractPlanLine(text, /酒店|住宿|入住|民宿|休息/), text),
   ]
 }
 
 function node(type: FlowType, icon: string, summary: string, dayText: string): FlowNode {
-  const label = ({ transport: '交通', attraction: '景点', food: '美食', hotel: '住宿' } as Record<FlowType, string>)[type]
+  const label = ({ attraction: '景点', food: '美食', hotel: '住宿' } as Record<FlowType, string>)[type]
   const detail = summary || fallbackDetail(type, dayText)
   return {
     type,
@@ -172,24 +169,24 @@ function node(type: FlowType, icon: string, summary: string, dayText: string): F
   }
 }
 
-function pickLine(text: string, pattern: RegExp) {
-  return text.split(/\n|。|；|;/).map(x => x.trim()).find(line => pattern.test(line)) || ''
+function extractPlanLine(text: string, pattern: RegExp) {
+  const line = text.split(/\n|。|；|;/).map(x => x.trim()).find(item => pattern.test(item)) || ''
+  return line.replace(/^(景点|打卡点|游览|美食|餐饮|午餐|晚餐|住宿|酒店|入住)[：:\s-]*/, '')
+}
+
+function hotelInfo(plan?: Plan) {
+  const text = plan?.content || ''
+  const match = text.match(/(?:^|\n)\s*(?:酒店|住宿)[：:\s-]*([^\n]+)/)
+  return match?.[1]?.trim() || ''
 }
 
 function fallbackDetail(type: FlowType, text: string) {
   const map = {
-    transport: '按 AI 建议安排当天交通，提前确认班次、路线和预计耗时。',
-    attraction: '按 AI 建议游览核心景点，注意开放时间和现场客流。',
-    food: '按 AI 建议体验当地美食，避开明显排队过长或评价异常的店。',
-    hotel: '按 AI 建议选择住宿区域，优先考虑交通便利和安全性。',
+    attraction: '按当天安排游览核心景点，注意开放时间和现场客流。',
+    food: '按当天安排体验当地美食，避开明显排队过长或评价异常的店。',
+    hotel: '按住宿区域安排返程路线，优先考虑交通便利和安全性。',
   }
-  return `${map[type]}\n\nAI 原始建议：\n${text}`
-}
-
-function iconForTransport(text: string) {
-  if (/飞机|航班|机场/.test(text)) return '✈️'
-  if (/地铁/.test(text)) return '🚇'
-  return '🚌'
+  return `${map[type]}\n\n完整内容：\n${text}`
 }
 
 function iconForAttraction(text: string) {
@@ -200,7 +197,6 @@ function iconForAttraction(text: string) {
 
 function tipFor(type: FlowType) {
   return {
-    transport: '提前查天气和交通管制，跨城交通建议预留 30-60 分钟缓冲。',
     attraction: '热门景点尽量错峰，先确认开放时间、闭园时间和实名预约规则。',
     food: '优先看近期评价，避免只看单个平台推荐；海鲜、夜市注意明码标价。',
     hotel: '入住前确认取消政策、押金、早餐、停车和到景点的实际通勤时间。',
@@ -209,7 +205,6 @@ function tipFor(type: FlowType) {
 
 function bookingFor(type: FlowType) {
   return {
-    transport: '高铁/机票用官方平台或主流 OTA；市内交通用高德地图实时规划。',
     attraction: '景区公众号、官方小程序、携程/美团等平台提前预约或购票。',
     food: '大众点评、美团、小红书/抖音查看近期反馈，热门餐厅提前电话确认。',
     hotel: '携程、飞猪、美团或酒店官方渠道预订，付款前核对房型和入住日期。',
@@ -226,11 +221,16 @@ function normalizeDayTitle(title: string, index: number) {
 }
 
 function inferDestination(plan: Plan) {
-  return plan.destination || plan.title.match(/去([\u4e00-\u9fa5]{2,8})/)?.[1] || 'AI推荐目的地'
+  return plan.destination || plan.title.match(/去([\u4e00-\u9fa5]{2,8})/)?.[1] || '旅行目的地'
 }
 
 function inferDays(plan: Plan) {
   return plan.days || Number(plan.content?.match(/(\d+)\s*天/)?.[1] || 1)
+}
+
+function listTitle(plan: Plan) {
+  if (plan.title) return plan.title
+  return `${plan.destination || inferDestination(plan)} · ${inferDays(plan)}日游`
 }
 
 function openNode(day: DayPlan, node: FlowNode) {
@@ -247,7 +247,7 @@ function renderChart() {
     return acc
   }, {})
   chart.setOption({
-    color: ['#6f8398', '#34c759', '#ffb340', '#4f8cff'],
+    color: ['#34c759', '#ffb340', '#4f8cff'],
     tooltip: { trigger: 'item' },
     series: [{
       type: 'pie',

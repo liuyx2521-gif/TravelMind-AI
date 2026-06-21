@@ -52,6 +52,6 @@ app:
     access-key: ${MINIO_ACCESS_KEY:minioadmin}
     secret-key: ${MINIO_SECRET_KEY:minioadmin}
   amap:
-    key: ${AMAP_KEY:${VITE_AMAP_KEY:}}
+    key: ${AMAP_WEB_KEY:${AMAP_KEY:}}
   upload:
     dir: ${UPLOAD_DIR:D:/Codex/project/backend/uploads}

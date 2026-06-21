@@ -10,4 +10,6 @@ import lombok.EqualsAndHashCode;
 public class AiConversation extends BaseEntity {
     private Long userId;
     private String title;
+    private String summary;
+    private Integer summaryMessageCount;
 }
