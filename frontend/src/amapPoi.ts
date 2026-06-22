@@ -1,3 +1,5 @@
+import { amapStaticMapUrl } from './externalLinks'
+
 export type AmapPoi = {
   id?: string
   name?: string
@@ -30,7 +32,7 @@ export function poiPhoto(poi: AmapPoi) {
 
 export function staticMap(location: AmapLocation | undefined, key: string) {
   const text = poiLocationText(location)
-  return text ? `https://restapi.amap.com/v3/staticmap?location=${text}&zoom=13&size=600*320&markers=mid,,A:${text}&key=${key}` : ''
+  return amapStaticMapUrl(text, key)
 }
 
 export function poiLocationText(location: AmapLocation | undefined) {

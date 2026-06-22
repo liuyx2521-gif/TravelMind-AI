@@ -1,14 +1,20 @@
 import type { Hotel } from './api'
+import { ctripHotelUrl, fliggyHotelUrl, placeKeyword } from './externalLinks'
+
+export { ctripHotelUrl, fliggyHotelUrl }
 
 type HotelLike = Pick<Hotel, 'name' | 'city' | 'price'>
 
 export function hotelBookingUrl(item: Pick<HotelLike, 'name' | 'city'>, fallbackCity = '') {
-  const keyword = encodeURIComponent(`${item.city || fallbackCity || ''} ${item.name}`.trim())
-  return `https://hotels.ctrip.com/hotels/list?keyword=${keyword}`
+  return ctripHotelUrl(item, fallbackCity)
+}
+
+export function hotelSearchKeyword(item: Pick<HotelLike, 'name' | 'city'>, fallbackCity = '') {
+  return placeKeyword(item, fallbackCity)
 }
 
 export function hotelPriceText(item: HotelLike, fallbackCity = '', index = 0) {
-  return `￥${normalizeHotelPrice(item.price, item, fallbackCity, index)}`
+  return `¥${normalizeHotelPrice(item.price, item, fallbackCity, index)}`
 }
 
 export function normalizeHotelPrice(price: unknown, item: Pick<HotelLike, 'name' | 'city'>, fallbackCity = '', index = 0) {

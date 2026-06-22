@@ -2,6 +2,7 @@
   <div class="space-y-5">
     <div class="liquid flex flex-wrap gap-3 rounded-[28px] p-4">
       <n-input v-model:value="city" class="max-w-xs" placeholder="城市，例如三亚" clearable @keydown.enter="loadOnline" />
+      <n-input v-model:value="keyword" class="max-w-xs" placeholder="关键词，例如海景 / 亲子 / 市中心" clearable @keydown.enter="loadOnline" />
       <n-button type="primary" round :loading="onlineLoading" @click="loadOnline">联网搜索</n-button>
     </div>
 
@@ -43,34 +44,46 @@ import { hotelPoiStableId, hotelSearchKeywords, sortRegularHotelPois } from '../
 import { saveOnlineHotel } from '../onlineDetail'
 
 const city = ref('杭州')
+const keyword = ref('')
 const list = ref<Hotel[]>([])
 const onlineLoading = ref(false)
 const tip = ref('在线酒店')
 const toast = useMessage()
 const router = useRouter()
+let searchController: AbortController | undefined
+let searchSeq = 0
 
 async function loadOnline() {
+  searchController?.abort()
+  const seq = ++searchSeq
+  searchController = new AbortController()
   onlineLoading.value = true
   tip.value = '正在从高德实时搜索酒店...'
   try {
+    let results: Hotel[]
     try {
-      list.value = await searchOnlineByBackend()
+      results = await searchOnlineByBackend(searchController.signal)
     } catch (error) {
+      if ((error as Error).name === 'CanceledError' || (error as Error).name === 'AbortError') throw error
       if (!String((error as Error).message).includes('USERKEY_PLAT_NOMATCH')) throw error
-      list.value = await searchOnlineByJs()
+      results = await searchOnlineByJs()
     }
-    tip.value = list.value.length ? `高德实时找到 ${list.value.length} 家酒店。` : '没有搜到在线酒店。'
+    if (seq !== searchSeq) return
+    list.value = results
+    tip.value = results.length ? `高德实时找到 ${results.length} 家酒店。` : '没有搜到在线酒店。'
   } catch (error) {
+    if ((error as Error).name === 'CanceledError' || (error as Error).name === 'AbortError') return
     toast.error((error as Error).message)
     tip.value = '高德联网搜索失败，请检查高德 Key 或网络。'
   } finally {
-    onlineLoading.value = false
+    if (seq === searchSeq) onlineLoading.value = false
   }
 }
 
-async function searchOnlineByBackend(): Promise<Hotel[]> {
+async function searchOnlineByBackend(signal?: AbortSignal): Promise<Hotel[]> {
   return (await http.get<Hotel[]>('/api/hotels/online', {
-    params: { city: city.value, keyword: city.value ? `${city.value}正规酒店` : '正规酒店', limit: 36 },
+    params: { city: city.value, keyword: `${city.value}正规酒店 ${keyword.value}`.trim() || '正规酒店', limit: 48 },
+    signal,
   })).map((item, index) => ({ ...item, price: normalizeHotelPrice(item.price, item, city.value, index), source: 'online' }))
 }
 
@@ -88,13 +101,14 @@ async function searchOnlineByJs(): Promise<Hotel[]> {
     pageSize: 20,
     pageIndex: 1,
   })
-  const results = await Promise.allSettled(hotelSearchKeywords(city.value, city.value ? `${city.value}正规酒店` : '正规酒店').map(word => new Promise<AmapPoi[]>((resolve, reject) => {
+  const hotelKeyword = `${city.value}正规酒店 ${keyword.value}`.trim() || '正规酒店'
+  const results = await Promise.allSettled(hotelSearchKeywords(city.value, hotelKeyword).map(word => new Promise<AmapPoi[]>((resolve, reject) => {
     placeSearch.search(word, (status: string, res: any) => {
       if (status === 'complete' && res?.poiList?.pois) resolve(res.poiList.pois)
       else reject(new Error(res?.info || '高德酒店搜索失败'))
     })
   })))
-  const result = sortRegularHotelPois(results.flatMap(item => item.status === 'fulfilled' ? item.value : [])).slice(0, 36)
+  const result = sortRegularHotelPois(results.flatMap(item => item.status === 'fulfilled' ? item.value : [])).slice(0, 48)
   return result.map((poi, index) => ({
     id: hotelPoiStableId(poi, index, city.value),
     name: poi.name,

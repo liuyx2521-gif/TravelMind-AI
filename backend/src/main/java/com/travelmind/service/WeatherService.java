@@ -19,6 +19,7 @@ public class WeatherService {
     private final AppProperties properties;
     private final ObjectMapper objectMapper;
     private final StringRedisTemplate redisTemplate;
+    private final RateLimitService rateLimitService;
     private final RestClient restClient = RestClient.create();
 
     public record WeatherInfo(
@@ -60,6 +61,7 @@ public class WeatherService {
         var cached = readCache(cacheKey);
         if (cached != null) return cached;
 
+        rateLimitService.check("weather", 60, Duration.ofMinutes(1));
         var adcode = adcode(query, key);
         var weather = queryWeather(adcode, key);
         writeCache(cacheKey, weather);

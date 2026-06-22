@@ -74,6 +74,7 @@
 
 <script setup lang="ts">
 import { computed, defineComponent, h, reactive } from 'vue'
+import { open12306Url } from '../externalLinks'
 
 type Seat = { name: string; price: number }
 type Ticket = {
@@ -186,14 +187,7 @@ function open12306(ticket?: Ticket) {
   const fromCode = stationCodes[form.origin.trim()]
   const toCode = stationCodes[form.destination.trim()]
   const date = dateText(form.date)
-  if (fromCode && toCode) {
-    const fs = encodeURIComponent(`${form.origin},${fromCode}`)
-    const ts = encodeURIComponent(`${form.destination},${toCode}`)
-    window.open(`https://kyfw.12306.cn/otn/leftTicket/init?linktypeid=dc&fs=${fs}&ts=${ts}&date=${date}&flag=N,N,Y`, '_blank', 'noreferrer')
-    return
-  }
-  const keyword = encodeURIComponent(`${form.origin} ${form.destination} ${date} ${ticket?.trainNo || ''}`)
-  window.open(`https://www.12306.cn/index/?keyword=${keyword}`, '_blank', 'noreferrer')
+  window.open(open12306Url({ origin: form.origin, destination: form.destination, date, trainNo: ticket?.trainNo, fromCode, toCode }), '_blank', 'noreferrer')
 }
 
 function dateText(value: number | null) {

@@ -51,4 +51,10 @@ public class FavoriteController {
                 .eq(Favorite::getTargetType, targetType));
         return Result.ok();
     }
+
+    @DeleteMapping("/all")
+    public Result<Void> clear() {
+        mapper.delete(lambdaQuery(Favorite.class).eq(Favorite::getUserId, LoginUser.id()));
+        return Result.ok();
+    }
 }

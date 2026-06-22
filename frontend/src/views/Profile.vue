@@ -50,9 +50,16 @@
           <h2 class="m-0 text-2xl">收藏</h2>
           <p class="m-0 mt-1 text-sm text-[var(--muted)]">{{ favoriteCards.length }} 个收藏</p>
         </div>
+        <n-button v-if="favoriteCards.length" size="small" round @click="clearFavorites">清空</n-button>
       </div>
       <div v-if="favoriteCards.length" class="grid max-h-[560px] grid-cols-2 gap-3 overflow-y-auto pr-1 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
-        <article v-for="item in favoriteCards" :key="item.key" class="group cursor-pointer overflow-hidden rounded-[18px] bg-white/45 transition hover:-translate-y-1 dark:bg-white/6" @click="openCard(item)">
+        <article v-for="item in favoriteCards" :key="item.key" class="group relative cursor-pointer overflow-hidden rounded-[18px] bg-white/45 transition hover:-translate-y-1 dark:bg-white/6" @click="openCard(item)">
+          <button
+            class="absolute right-2 top-2 z-1 rounded-full bg-black/45 px-2 py-1 text-xs text-white opacity-0 shadow-sm backdrop-blur transition hover:bg-black/65 group-hover:opacity-100"
+            @click.stop="deleteFavorite(item)"
+          >
+            移除
+          </button>
           <div class="aspect-[3/4] overflow-hidden bg-black/8">
             <img :src="item.cover" :alt="item.title" class="h-full w-full object-cover transition duration-300 group-hover:scale-105" @error="fallbackCardImage" />
           </div>
@@ -96,10 +103,11 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useMessage } from 'naive-ui'
-import { http, type Note, type PageResp } from '../api'
+import { http, type Attraction, type Hotel, type Note, type PageResp } from '../api'
 import { useUserStore } from '../stores/user'
 import { placeImagePlaceholder } from '../imageFallback'
-import { getFavoriteCard } from '../favoriteCache'
+import { getFavoriteCard, removeFavoriteCard } from '../favoriteCache'
+import { saveOnlineAttraction, saveOnlineHotel } from '../onlineDetail'
 
 const user = useUserStore()
 const router = useRouter()
@@ -243,7 +251,68 @@ function pathByType(type: string, id: number) {
 }
 
 function openCard(item: CardItem) {
+  restoreOnlineDetail(item)
   if (item.path) router.push(item.path)
+}
+
+async function deleteFavorite(item: CardItem) {
+  try {
+    await http.delete('/api/favorites', { params: { targetId: item.id, targetType: item.type } })
+    removeFavoriteCard(item.type, item.id)
+    favorites.value = favorites.value.filter(row => !(Number(row.targetId) === Number(item.id) && row.targetType === item.type))
+    favoriteCards.value = favoriteCards.value.filter(card => !(Number(card.id) === Number(item.id) && card.type === item.type))
+    toast.success('已移除收藏')
+  } catch (e) {
+    toast.error((e as Error).message || '移除失败')
+  }
+}
+
+async function clearFavorites() {
+  try {
+    await http.delete('/api/favorites/all')
+    for (const item of favoriteCards.value) removeFavoriteCard(item.type, item.id)
+    favorites.value = []
+    favoriteCards.value = []
+    toast.success('收藏已清空')
+  } catch (e) {
+    toast.error((e as Error).message || '清空失败')
+  }
+}
+
+function restoreOnlineDetail(item: CardItem) {
+  if (!item.path?.includes('/online-')) return
+  if (item.type === 'ATTRACTION') {
+    saveOnlineAttraction({
+      id: item.id,
+      name: item.title,
+      province: '',
+      city: '',
+      description: item.meta || item.title,
+      coverImage: item.cover,
+      price: 0,
+      bestSeason: '联网结果',
+      openTime: '请以当天公告为准',
+      score: 0,
+      tags: '在线景点',
+      longitude: 0,
+      latitude: 0,
+      source: 'online',
+    } as Attraction)
+  }
+  if (item.type === 'HOTEL') {
+    saveOnlineHotel({
+      id: item.id,
+      name: item.title,
+      city: '',
+      address: item.meta || item.title,
+      price: 0,
+      score: 0,
+      cover: item.cover,
+      longitude: 0,
+      latitude: 0,
+      source: 'online',
+    } as Hotel)
+  }
 }
 
 function fallbackCardImage(e: Event) {

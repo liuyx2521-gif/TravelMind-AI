@@ -25,6 +25,7 @@
             :href="link.url"
             target="_blank"
             rel="noreferrer"
+            @click="copyBookingKeyword(link)"
             class="rounded-2xl bg-[var(--button-primary-bg)] px-4 py-2 text-white shadow-lg transition hover:bg-[var(--button-primary-bg-hover)]"
           >
             {{ link.name }}
@@ -54,22 +55,26 @@ import AmapView from '../components/AmapView.vue'
 import SocialRecommendations from '../components/SocialRecommendations.vue'
 import { http, type Hotel } from '../api'
 import { fallbackPlaceImage, placeImagePlaceholder } from '../imageFallback'
-import { hotelBookingUrl, hotelPriceText } from '../hotelPrice'
+import { ctripHotelUrl, fliggyHotelUrl, hotelBookingUrl, hotelPriceText, hotelSearchKeyword } from '../hotelPrice'
 import { loadOnlineHotel } from '../onlineDetail'
 import { removeFavoriteCard, saveFavoriteCard } from '../favoriteCache'
+
+type BookingLink = {
+  name: string
+  url: string
+  copyKeyword?: boolean
+}
 
 const route = useRoute()
 const toast = useMessage()
 const item = ref<Hotel>()
 const favorited = ref(false)
-const bookingLinks = computed(() => {
+const bookingLinks = computed<BookingLink[]>(() => {
   if (!item.value) return []
-  const keyword = encodeURIComponent(`${item.value.city || ''} ${item.value.name}`.trim())
   return [
     { name: '当前酒店实时价', url: hotelBookingUrl(item.value) },
-    { name: '携程搜索', url: `https://hotels.ctrip.com/hotels/list?keyword=${keyword}` },
-    { name: '飞猪搜索', url: `https://s.fliggy.com/hotel?searchText=${keyword}` },
-    { name: '美团搜索', url: `https://www.meituan.com/s/${keyword}` },
+    { name: '携程搜索', url: ctripHotelUrl(item.value) },
+    { name: '飞猪搜索', url: fliggyHotelUrl(item.value), copyKeyword: true },
   ]
 })
 
@@ -108,7 +113,7 @@ async function loadFavoriteState() {
 async function toggleFavorite() {
   if (!item.value) return
   if (!localStorage.getItem('token')) {
-    toast.warning('登录后才可以收藏酒店')
+    toast.warning('登录后可以收藏酒店')
     return
   }
   try {
@@ -127,6 +132,14 @@ async function toggleFavorite() {
   } catch (e) {
     toast.error((e as Error).message)
   }
+}
+
+async function copyBookingKeyword(link: BookingLink) {
+  if (!link.copyKeyword || !item.value || !navigator.clipboard) return
+  try {
+    await navigator.clipboard.writeText(hotelSearchKeyword(item.value))
+    toast.success('已复制酒店名称，打开平台后可直接粘贴搜索')
+  } catch {}
 }
 
 function cardPayload() {

@@ -6,10 +6,12 @@ import com.travelmind.common.Result;
 import com.travelmind.mapper.AttractionMapper;
 import com.travelmind.model.Attraction;
 import com.travelmind.service.AmapPoiService;
+import com.travelmind.service.RateLimitService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.Month;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.util.List;
 
@@ -21,6 +23,7 @@ import static com.baomidou.mybatisplus.core.toolkit.Wrappers.lambdaQuery;
 public class AttractionController {
     private final AttractionMapper mapper;
     private final AmapPoiService amapPoiService;
+    private final RateLimitService rateLimitService;
 
     @GetMapping
     public Result<PageResp<Attraction>> page(String keyword, String city, String tag,
@@ -51,6 +54,7 @@ public class AttractionController {
     public Result<List<Attraction>> online(String keyword, String city,
                                            @RequestParam(defaultValue = "20") int limit,
                                            @RequestParam(required = false) String key) {
+        rateLimitService.check("poi", 60, Duration.ofMinutes(1));
         return Result.ok(amapPoiService.searchAttractions(keyword, city, limit, key));
     }
 

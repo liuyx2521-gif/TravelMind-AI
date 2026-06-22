@@ -39,6 +39,7 @@
 <script setup lang="ts">
 import AMapLoader from '@amap/amap-jsapi-loader'
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { amapMarkerUrl } from '../externalLinks'
 
 const props = defineProps<{
   longitude: number
@@ -51,18 +52,16 @@ const mode = ref<'loading' | 'amap' | 'fallback'>('loading')
 const locationTip = ref('')
 const userLocation = ref<{ longitude: number; latitude: number }>()
 const title = computed(() => props.title || '目的地位置')
-const fallbackUrl = computed(() => {
-  const name = encodeURIComponent(title.value)
-  return `https://uri.amap.com/marker?position=${props.longitude},${props.latitude}&name=${name}&src=travelmind&coordinate=gaode&callnative=0`
-})
+const fallbackUrl = computed(() => amapMarkerUrl(props.longitude, props.latitude, title.value))
 const fallbackImage = computed(() => `https://staticmap.openstreetmap.de/staticmap.php?center=${props.latitude},${props.longitude}&zoom=13&size=900x420&markers=${props.latitude},${props.longitude},red-pushpin`)
 let map: any
 let AMapRef: any
 let targetMarker: any
 let userMarker: any
+let geolocation: any
 
 async function requestLocation() {
-  const current = await getCurrentLocation()
+  const current = map && AMapRef ? await getAmapLocation() : await getBrowserLocation()
   if (current && map && AMapRef) {
     userMarker?.setMap?.(null)
     userMarker = new AMapRef.Marker({
@@ -75,7 +74,34 @@ async function requestLocation() {
   }
 }
 
-function getCurrentLocation() {
+function getAmapLocation() {
+  return new Promise<{ longitude: number; latitude: number } | undefined>(resolve => {
+    if (!geolocation) {
+      resolve(undefined)
+      return
+    }
+    locationTip.value = '正在获取你的位置...'
+    geolocation.getCurrentPosition((status: string, result: any) => {
+      if (status === 'complete' && result?.position) {
+        const position = result.position
+        const location = {
+          longitude: Number(position.lng ?? position.getLng?.()),
+          latitude: Number(position.lat ?? position.getLat?.()),
+        }
+        userLocation.value = location
+        locationTip.value = '已获取你的位置'
+        window.setTimeout(() => (locationTip.value = ''), 2200)
+        resolve(location)
+        return
+      }
+      locationTip.value = result?.message || '定位失败，请检查浏览器定位权限'
+      window.setTimeout(() => (locationTip.value = ''), 3000)
+      resolve(undefined)
+    })
+  })
+}
+
+function getBrowserLocation() {
   return new Promise<{ longitude: number; latitude: number } | undefined>(resolve => {
     if (!navigator.geolocation) {
       locationTip.value = '当前浏览器不支持定位'
@@ -121,7 +147,7 @@ async function initMap() {
     const AMap = await AMapLoader.load({
       key,
       version: '2.0',
-      plugins: ['AMap.Scale', 'AMap.ToolBar'],
+      plugins: ['AMap.Scale', 'AMap.ToolBar', 'AMap.Geolocation'],
     })
     AMapRef = AMap
     mode.value = 'amap'
@@ -133,6 +159,17 @@ async function initMap() {
     })
     map.addControl(new AMap.Scale())
     map.addControl(new AMap.ToolBar())
+    geolocation = new AMap.Geolocation({
+      enableHighAccuracy: true,
+      timeout: 10000,
+      maximumAge: 60000,
+      convert: true,
+      showButton: false,
+      showMarker: false,
+      panToLocation: false,
+      zoomToAccuracy: false,
+    })
+    map.addControl(geolocation)
     targetMarker = new AMap.Marker({
       map,
       position: [props.longitude, props.latitude],

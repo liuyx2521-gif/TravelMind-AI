@@ -8,6 +8,7 @@ import com.travelmind.mapper.AiMessageMapper;
 import com.travelmind.model.AiConversation;
 import com.travelmind.model.AiMessage;
 import com.travelmind.security.LoginUser;
+import com.travelmind.service.RateLimitService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.MediaType;
@@ -28,6 +29,7 @@ public class AiController {
     private final AiConversationMapper conversationMapper;
     private final AiMessageMapper messageMapper;
     private final StringRedisTemplate redisTemplate;
+    private final RateLimitService rateLimitService;
     private static final int RECENT_LIMIT = 12;
     private static final int SUMMARY_AFTER_MESSAGES = 40;
     private static final int SUMMARY_REFRESH_STEP = 10;
@@ -37,6 +39,7 @@ public class AiController {
 
     @PostMapping("/chat")
     public Result<ChatResp> chat(@RequestBody AiService.ChatReq req) {
+        rateLimitService.check("ai", 20, Duration.ofMinutes(1));
         var userId = LoginUser.optionalId().orElse(0L);
         var conversationId = conversationId(userId, req);
         var context = context(conversationId);
@@ -58,26 +61,31 @@ public class AiController {
 
     @PostMapping("/plan")
     public Result<String> plan(@RequestBody AiService.PlanReq req) {
+        rateLimitService.check("ai", 12, Duration.ofMinutes(1));
         return Result.ok(aiService.plan(req));
     }
 
     @PostMapping("/budget")
     public Result<String> budget(@RequestBody AiService.BudgetReq req) {
+        rateLimitService.check("ai", 12, Duration.ofMinutes(1));
         return Result.ok(aiService.budget(req));
     }
 
     @PostMapping("/hotels")
     public Result<String> hotels(@RequestBody AiService.RecommendReq req) {
+        rateLimitService.check("ai", 12, Duration.ofMinutes(1));
         return Result.ok(aiService.hotels(req));
     }
 
     @PostMapping("/attractions")
     public Result<String> attractions(@RequestBody AiService.RecommendReq req) {
+        rateLimitService.check("ai", 12, Duration.ofMinutes(1));
         return Result.ok(aiService.attractions(req));
     }
 
     @PostMapping(value = "/chat/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public ResponseEntity<StreamingResponseBody> stream(@RequestBody AiService.ChatReq req) {
+        rateLimitService.check("ai", 20, Duration.ofMinutes(1));
         var userId = LoginUser.optionalId().orElse(0L);
         var conversationId = conversationId(userId, req);
         var context = context(conversationId);

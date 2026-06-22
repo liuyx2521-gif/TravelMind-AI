@@ -20,6 +20,10 @@
           >
             <div v-if="item.role === 'assistant'" class="mb-1 text-xs font-700 text-[var(--muted)]">TravelMind</div>
             <div class="whitespace-pre-wrap break-words">{{ item.content }}</div>
+            <div v-if="item.role === 'assistant' && item.content" class="mt-2 flex flex-wrap gap-2">
+              <n-button size="tiny" round @click="copyAnswer(item.content)">复制</n-button>
+              <n-button v-if="isLastAssistant(item)" size="tiny" round @click="regenerateAnswer">重新生成</n-button>
+            </div>
           </div>
         </div>
         <div v-if="loading" class="flex justify-start">
@@ -45,7 +49,8 @@
             placeholder="问我：杭州出发，预算3000，想去海边玩3天..."
             @keydown.enter.exact.prevent="ask"
           />
-          <n-button type="primary" round :loading="loading" :disabled="!message.trim()" @click="ask">发送</n-button>
+          <n-button v-if="loading" round @click="stopGeneration">停止</n-button>
+          <n-button v-else type="primary" round :disabled="!message.trim()" @click="ask">发送</n-button>
         </div>
       </div>
     </div>
@@ -98,7 +103,7 @@
         <div v-if="!user.token" class="rounded-2xl bg-white/42 p-3 text-sm text-[var(--muted)] dark:bg-white/6">
           登录后可同步保存会话。
         </div>
-        <div v-else class="space-y-2">
+        <div v-else class="max-h-[280px] space-y-2 overflow-y-auto pr-1">
           <div
             v-for="item in conversations"
             :key="item.id"
@@ -129,10 +134,14 @@
         </div>
       </div>
 
-      <div v-if="weatherCity" class="liquid rounded-[28px] p-5">
+      <div class="liquid rounded-[28px] p-5">
         <div class="mb-3 flex items-center justify-between gap-3">
           <h2 class="m-0 text-xl">目的地天气</h2>
           <span class="rounded-2xl bg-white/55 px-3 py-1 text-xs font-700 dark:bg-white/10">{{ weatherCity }}</span>
+        </div>
+        <div class="mb-3 flex gap-2">
+          <n-input v-model:value="weatherQuery" size="small" placeholder="查询城市天气" clearable @keydown.enter="loadWeather(weatherQuery)" />
+          <n-button size="small" round :loading="weatherLoading" @click="loadWeather(weatherQuery)">查询</n-button>
         </div>
         <div v-if="weatherLoading" class="text-sm text-[var(--muted)]">正在更新天气...</div>
         <div v-else-if="weather" class="grid gap-3">
@@ -272,16 +281,26 @@ const activeBudget = computed(() => budgetPlans.value[selectedBudgetIndex.value]
 const latestTravelText = computed(() => [...messages.value].reverse().map(item => item.content).join('\n'))
 const socialCity = computed(() => destinationCity(latestTravelText.value) || extractCity(latestTravelText.value))
 const socialPlace = computed(() => extractSocialPlace(latestTravelText.value) || socialCity.value || '旅行攻略')
-const weatherCity = computed(() => destinationCity(latestTravelText.value) || extractSocialPlace(latestTravelText.value) || socialCity.value)
+const weatherCity = computed(() => destinationCity(latestTravelText.value) || extractSocialPlace(latestTravelText.value) || socialCity.value || '三亚')
 const weather = ref<WeatherInfo>()
 const weatherLoading = ref(false)
 const weatherError = ref('')
+const weatherQuery = ref(weatherCity.value)
+let chatAbortController: AbortController | undefined
 
 async function ask() {
-  const text = message.value.trim()
+  await askText(message.value)
+}
+
+async function askText(rawText: string, appendUser = true) {
+  const text = rawText.trim()
   if (!text || loading.value) return
+  if (!user.token) {
+    toast.warning('登录后可以使用 AI 对话')
+    return
+  }
   const requestBudget = extractRequestedBudget(text) || 3000
-  messages.value.push({ id: crypto.randomUUID(), role: 'user', content: text })
+  if (appendUser) messages.value.push({ id: crypto.randomUUID(), role: 'user', content: text })
   const assistant = { id: crypto.randomUUID(), role: 'assistant' as const, content: '' }
   messages.value.push(assistant)
   message.value = ''
@@ -293,8 +312,13 @@ async function ask() {
     setBudgetPlans(parseBudgetPlans(assistant.content, requestBudget))
     await loadConversations()
   } catch (e) {
-    messages.value = messages.value.filter(item => item.id !== assistant.id)
-    toast.error((e as Error).message)
+    if ((e as Error).name === 'AbortError') {
+      if (!assistant.content.trim()) messages.value = messages.value.filter(item => item.id !== assistant.id)
+      else toast.info('已停止生成')
+    } else {
+      messages.value = messages.value.filter(item => item.id !== assistant.id)
+      toast.error((e as Error).message)
+    }
   } finally {
     loading.value = false
     await scrollBottom()
@@ -303,6 +327,36 @@ async function ask() {
 
 function fallbackImage(e: Event, item: Attraction) {
   fallbackPlaceImage(e, item)
+}
+
+function stopGeneration() {
+  chatAbortController?.abort()
+  loading.value = false
+}
+
+async function regenerateAnswer() {
+  if (loading.value) return
+  const lastUser = [...messages.value].reverse().find(item => item.role === 'user')?.content
+  if (!lastUser) {
+    toast.warning('没有可重新生成的问题')
+    return
+  }
+  const lastAssistantIndex = messages.value.map(item => item.role).lastIndexOf('assistant')
+  if (lastAssistantIndex >= 0) messages.value.splice(lastAssistantIndex, 1)
+  await askText(lastUser, false)
+}
+
+async function copyAnswer(content: string) {
+  try {
+    await navigator.clipboard.writeText(content)
+    toast.success('已复制')
+  } catch {
+    toast.error('复制失败')
+  }
+}
+
+function isLastAssistant(item: ChatMessage) {
+  return [...messages.value].reverse().find(message => message.role === 'assistant')?.id === item.id
 }
 
 function goOnlineAttraction(item: Attraction) {
@@ -346,8 +400,11 @@ async function deleteConversation(id: number) {
 
 async function streamChat(aiMessage: string, assistant: ChatMessage) {
   const baseUrl = import.meta.env.VITE_API_BASE_URL || ''
+  chatAbortController?.abort()
+  chatAbortController = new AbortController()
   const response = await fetch(`${baseUrl}/api/ai/chat/stream`, {
     method: 'POST',
+    signal: chatAbortController.signal,
     headers: {
       'Content-Type': 'application/json',
       ...(localStorage.getItem('token') ? { Authorization: `Bearer ${localStorage.getItem('token')}` } : {}),
@@ -365,9 +422,11 @@ async function streamChat(aiMessage: string, assistant: ChatMessage) {
     const blocks = buffer.split(/\r?\n\r?\n/)
     buffer = blocks.pop() || ''
     for (const block of blocks) handleStreamBlock(block, assistant)
+    saveChatCache()
     await scrollBottom()
   }
   if (buffer.trim()) handleStreamBlock(buffer, assistant)
+  saveChatCache()
   if (!assistant.content.trim()) throw new Error('AI 暂未返回内容')
 }
 
@@ -621,13 +680,14 @@ watch(conversationId, () => {
 })
 
 watch(weatherCity, city => {
+  weatherQuery.value = city
   loadWeather(city)
 })
 
 onMounted(async () => {
   if (user.token && !user.user) await user.fetchMe()
   await loadConversations()
-  restoreChatCache()
+  await restoreChatCache()
   await scrollBottom()
   await loadWeather(weatherCity.value)
   seasonal.value = await loadOnlineSeasonalAttractions()
@@ -640,9 +700,9 @@ onMounted(async () => {
   }
 })
 
-watch(() => chatOwnerKey(), () => {
-  loadConversations()
-  restoreChatCache()
+watch(() => chatOwnerKey(), async () => {
+  await loadConversations()
+  await restoreChatCache()
 })
 
 function defaultMessages(content = '你好，我是 TravelMind AI。') {
@@ -650,27 +710,31 @@ function defaultMessages(content = '你好，我是 TravelMind AI。') {
 }
 
 function chatOwnerKey() {
-  if (!user.token) return ''
+  if (!user.token) return 'guest'
   return user.user?.id ? `user-${user.user.id}` : `token-${jwtSubject(user.token)}`
 }
 
 function chatStorageKey() {
-  const owner = chatOwnerKey()
-  return owner ? `travelmind-chat-${owner}` : ''
+  return `travelmind-chat-${chatOwnerKey()}`
+}
+
+function chatFallbackStorageKeys() {
+  const keys = [chatStorageKey()]
+  if (user.token) keys.push(`travelmind-chat-token-${jwtSubject(user.token)}`)
+  return [...new Set(keys)]
 }
 
 function saveChatCache() {
   if (restoringChat) return
-  const key = chatStorageKey()
-  if (!key) return
-  localStorage.setItem(key, JSON.stringify({ conversationId: conversationId.value, messages: messages.value }))
+  const value = JSON.stringify({ conversationId: conversationId.value, messages: messages.value })
+  chatFallbackStorageKeys().forEach(key => localStorage.setItem(key, value))
 }
 
-function restoreChatCache() {
+async function restoreChatCache() {
   restoringChat = true
-  const key = chatStorageKey()
-  const cache = key ? localStorage.getItem(key) : ''
-  if (cache) {
+  for (const key of chatFallbackStorageKeys()) {
+    const cache = localStorage.getItem(key)
+    if (!cache) continue
     try {
       const data = JSON.parse(cache)
       if (Array.isArray(data.messages) && data.messages.length) {
@@ -679,9 +743,16 @@ function restoreChatCache() {
         const latestAssistant = [...messages.value].reverse().find(item => item.role === 'assistant')?.content
         if (latestAssistant) setBudgetPlans(parseBudgetPlans(latestAssistant))
         restoringChat = false
+        saveChatCache()
         return
       }
     } catch {}
+  }
+  if (user.token && conversations.value.length) {
+    restoringChat = false
+    await openConversation(conversations.value[0].id)
+    saveChatCache()
+    return
   }
   conversationId.value = undefined
   messages.value = defaultMessages()
@@ -710,7 +781,8 @@ function resizeBudgetChart() {
 watch(() => theme.dark, () => nextTick(renderBudgetChart))
 
 async function loadWeather(city: string) {
-  const target = city?.trim()
+  const target = city?.trim() || weatherCity.value
+  weatherQuery.value = target
   weather.value = undefined
   weatherError.value = ''
   if (!target) return

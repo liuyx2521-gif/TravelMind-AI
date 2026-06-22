@@ -2,7 +2,7 @@
 
 AI 个性化旅游推荐与智能规划平台。
 
-这是一套“功能完整但代码尽量简单”的可运行版本：不做复杂 DDD，不堆 DTO/VO/Converter，CRUD 优先使用 MyBatis Plus，只有认证、AI、上传这些必要场景写少量业务代码。
+
 
 ## 功能
 
@@ -36,11 +36,11 @@ docs      完整架构设计文档
 
 ## 本地启动
 
-1. 启动基础设施：
+1. 启动本地基础设施：
 
 ```bash
 cd deploy
-docker compose up -d mysql redis minio
+docker compose -f docker-compose.local.yml up -d
 ```
 
 2. 启动后端：
@@ -66,6 +66,51 @@ npm run dev
 接口文档：http://localhost:8081/doc.html
 MinIO：http://localhost:9001
 ```
+
+## 阿里云后端部署
+
+当前推荐架构：前端部署到 Vercel，阿里云 ECS 只部署后端、MySQL、Redis、MinIO 和 Nginx。
+
+1. 在服务器安装 Docker / Docker Compose。
+
+2. 拉取代码并创建后端环境文件：
+
+```bash
+git clone https://github.com/liuyx2521-gif/TravelMind-AI.git
+cd TravelMind-AI
+cp backend/.env.example backend/.env
+```
+
+3. 编辑 `backend/.env`，至少填写：
+
+```env
+MYSQL_ROOT_PASSWORD=change_me
+MYSQL_PASSWORD=change_me
+JWT_SECRET=change_to_a_random_32_chars_secret
+CORS_ALLOWED_ORIGINS=https://你的-vercel-域名.vercel.app
+AI_API_KEY=你的 DeepSeek Key
+AMAP_WEB_KEY=你的高德 Web 服务 Key
+MINIO_ACCESS_KEY=change_me
+MINIO_SECRET_KEY=change_me_至少8位
+MINIO_PUBLIC_URL=https://你的后端域名
+```
+
+4. 启动后端服务：
+
+```bash
+cd deploy
+docker compose --env-file ../backend/.env up -d --build
+```
+
+5. Vercel 前端环境变量：
+
+```env
+VITE_API_BASE_URL=https://你的后端域名
+VITE_AMAP_KEY=你的高德 JS Key
+VITE_AMAP_SECURITY_CODE=你的高德安全密钥
+```
+
+阿里云安全组建议只开放 `80`、`443`、`22`，MySQL、Redis、MinIO 不直接暴露公网。
 
 ## 免费 AI 接入
 

@@ -51,7 +51,8 @@ import { useMessage } from 'naive-ui'
 import AMapLoader from '@amap/amap-jsapi-loader'
 import AmapView from '../components/AmapView.vue'
 import { http, type Attraction } from '../api'
-import { poiLatitude, poiLongitude, poiPhoto, stablePoiId, staticMap, type AmapPoi } from '../amapPoi'
+import { poiLatitude, poiLongitude, poiPhoto, staticMap, type AmapPoi } from '../amapPoi'
+import { attractionCities, attractionKeywords, attractionPoiStableId, sortTravelPois } from '../attractionSearch'
 import { realAttractionImage } from '../realAttractionImages'
 import { fallbackPlaceImage, placeImagePlaceholder } from '../imageFallback'
 import { saveOnlineAttraction } from '../onlineDetail'
@@ -66,33 +67,48 @@ const onlineLoading = ref(false)
 const modeTip = ref(seasonalAttractionTip())
 const toast = useMessage()
 const router = useRouter()
+let searchController: AbortController | undefined
+let searchSeq = 0
 
 async function loadOnline() {
+  searchController?.abort()
+  const seq = ++searchSeq
+  searchController = new AbortController()
   onlineLoading.value = true
   modeTip.value = `正在从高德实时搜索：${keyword.value || seasonalAttractionKeyword()}`
   try {
-    list.value = isDefaultSeasonalSearch() ? await searchSeasonalRecommendations() : await searchOnline()
-    modeTip.value = list.value.length
-      ? `${seasonalAttractionTip()} 高德实时找到 ${list.value.length} 条景点结果。`
+    const results = isDefaultSeasonalSearch() ? await searchSeasonalRecommendations(searchController.signal) : await searchOnline(searchController.signal)
+    if (seq !== searchSeq) return
+    list.value = results
+    modeTip.value = results.length
+      ? `${seasonalAttractionTip()} 高德实时找到 ${results.length} 条景点结果。`
       : '没有搜到在线景点，可以换一个城市或关键词。'
   } catch (error) {
+    if ((error as Error).name === 'CanceledError' || (error as Error).name === 'AbortError') return
     modeTip.value = '高德联网搜索失败，请检查高德 Key 或网络。'
     toast.error((error as Error).message)
   } finally {
-    onlineLoading.value = false
+    if (seq === searchSeq) onlineLoading.value = false
   }
 }
 
-async function searchOnline() {
+async function searchOnline(signal?: AbortSignal) {
   try {
-    return await searchOnlineByBackend()
+    return await searchOnlineByBackend(signal)
   } catch (error) {
+    if ((error as Error).name === 'CanceledError' || (error as Error).name === 'AbortError') throw error
     if (!String((error as Error).message).includes('USERKEY_PLAT_NOMATCH')) throw error
     return await searchOnlineByJs()
   }
 }
 
-async function searchSeasonalRecommendations() {
+async function searchSeasonalRecommendations(signal?: AbortSignal) {
+  try {
+    const rows = await searchOnlineByBackend(signal)
+    if (rows.length) return rows.slice(0, 24)
+  } catch (error) {
+    if ((error as Error).name === 'CanceledError' || (error as Error).name === 'AbortError') throw error
+  }
   const groups = await Promise.allSettled(
     seasonalAttractionQueries().map(query => searchOnlineByJs(query.keyword, query.city, 6))
   )
@@ -107,9 +123,10 @@ async function searchSeasonalRecommendations() {
     .slice(0, 24)
 }
 
-async function searchOnlineByBackend(): Promise<Attraction[]> {
+async function searchOnlineByBackend(signal?: AbortSignal): Promise<Attraction[]> {
   const results = await http.get<Attraction[]>('/api/attractions/online', {
-    params: { keyword: keyword.value || seasonalAttractionKeyword(), city: city.value, limit: 24 },
+    params: { keyword: keyword.value || seasonalAttractionKeyword(), city: city.value, limit: 48 },
+    signal,
   })
   return results.map(item => ({ ...item, source: 'online' }))
 }
@@ -120,21 +137,27 @@ async function searchOnlineByJs(searchKeyword = keyword.value || seasonalAttract
   const securityJsCode = import.meta.env.VITE_AMAP_SECURITY_CODE
   if (securityJsCode) (window as any)._AMapSecurityConfig = { securityJsCode }
   const AMap = await AMapLoader.load({ key, version: '2.0', plugins: ['AMap.PlaceSearch'] })
-  const placeSearch = new AMap.PlaceSearch({
-    city: searchCity || undefined,
-    citylimit: !!searchCity,
-    extensions: 'all',
-    pageSize,
-    pageIndex: 1,
-  })
-  const result = await new Promise<AmapPoi[]>((resolve, reject) => {
-    placeSearch.search(searchKeyword, (status: string, res: any) => {
-      if (status === 'complete' && res?.poiList?.pois) resolve(res.poiList.pois)
-      else reject(new Error(res?.info || '高德在线搜索失败'))
-    })
-  })
+  const groups = await Promise.allSettled(
+    attractionCities(searchKeyword, searchCity)
+      .flatMap(targetCity => attractionKeywords(searchKeyword).map(word => ({ targetCity, word })))
+      .slice(0, 28)
+      .map(({ targetCity, word }) => new Promise<AmapPoi[]>((resolve, reject) => {
+        const searcher = new AMap.PlaceSearch({
+          city: targetCity || undefined,
+          citylimit: !!targetCity,
+          extensions: 'all',
+          pageSize: Math.min(pageSize, 25),
+          pageIndex: 1,
+        })
+        searcher.search(word, (status: string, res: any) => {
+          if (status === 'complete' && res?.poiList?.pois) resolve(res.poiList.pois)
+          else reject(new Error(res?.info || '高德在线搜索失败'))
+        })
+      }))
+  )
+  const result = sortTravelPois(groups.flatMap(group => group.status === 'fulfilled' ? group.value : [])).slice(0, 48)
   return result.map((poi, index) => ({
-    id: stablePoiId(poi, index, 'attraction', searchCity || city.value),
+    id: attractionPoiStableId(poi, index, poi.cityname || searchCity || city.value),
     name: poi.name,
     city: poi.cityname || searchCity || '',
     province: poi.pname || '',

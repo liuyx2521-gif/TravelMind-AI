@@ -1,0 +1,42 @@
+server:
+  port: ${SERVER_PORT:8081}
+
+spring:
+  datasource:
+    url: jdbc:mysql://${MYSQL_HOST}:${MYSQL_PORT:3306}/${MYSQL_DB:travelmind_ai}?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false
+    username: ${MYSQL_USER}
+    password: ${MYSQL_PASSWORD}
+  data:
+    redis:
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT:6379}
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    locations: classpath:db/migration
+
+knife4j:
+  enable: false
+
+app:
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS}
+  jwt:
+    secret: ${JWT_SECRET}
+    expire-seconds: ${JWT_EXPIRE_SECONDS:604800}
+  ai:
+    provider: ${AI_PROVIDER:deepseek}
+    base-url: ${AI_BASE_URL:https://api.deepseek.com}
+    api-key: ${AI_API_KEY:${DEEPSEEK_API_KEY:}}
+    model: ${AI_MODEL:deepseek-chat}
+    local-base-url: ${AI_LOCAL_BASE_URL:http://localhost:11434}
+    local-model: ${AI_LOCAL_MODEL:qwen2.5:3b-instruct}
+  minio:
+    endpoint: ${MINIO_ENDPOINT}
+    public-url: ${MINIO_PUBLIC_URL}
+    access-key: ${MINIO_ACCESS_KEY}
+    secret-key: ${MINIO_SECRET_KEY}
+  amap:
+    key: ${AMAP_WEB_KEY}
+  upload:
+    dir: ${UPLOAD_DIR:/opt/travelmind/uploads}

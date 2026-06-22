@@ -364,6 +364,7 @@ import {
 } from '../tripPlanner'
 import { cityCoords, cityDistance, dateText, levelText, stationCodes, transitAnchors } from '../travelMath'
 import { useUserStore } from '../stores/user'
+import { amapNavigationUrl, open12306Url } from '../externalLinks'
 
 type AmapWindow = Window & { _AMapSecurityConfig?: { securityJsCode: string } }
 type AmapSearchResponse = { poiList?: { pois?: AmapPoi[] }; info?: string }
@@ -642,14 +643,7 @@ function open12306(ticket = selectedTicket.value) {
   const fromCode = stationCodes[trip.origin.trim()]
   const toCode = stationCodes[trip.destination.trim()]
   const date = dateText(trip.date)
-  if (fromCode && toCode) {
-    const fs = encodeURIComponent(`${trip.origin},${fromCode}`)
-    const ts = encodeURIComponent(`${trip.destination},${toCode}`)
-    window.open(`https://kyfw.12306.cn/otn/leftTicket/init?linktypeid=dc&fs=${fs}&ts=${ts}&date=${date}&flag=N,N,Y`, '_blank', 'noreferrer')
-    return
-  }
-  const keyword = encodeURIComponent(`${trip.origin} ${trip.destination} ${date} ${ticket?.trainNo || ''}`)
-  window.open(`https://www.12306.cn/index/?keyword=${keyword}`, '_blank', 'noreferrer')
+  window.open(open12306Url({ origin: trip.origin, destination: trip.destination, date, trainNo: ticket?.trainNo, fromCode, toCode }), '_blank', 'noreferrer')
 }
 
 function openHotelBooking(hotel = selectedHotel.value) {
@@ -659,9 +653,7 @@ function openHotelBooking(hotel = selectedHotel.value) {
 
 function openHotelNavigation(hotel: HotelOption) {
   const anchor = transitAnchors[hotel.city] || { name: trip.destination, longitude: cityCoords[trip.destination]?.[0] || 0, latitude: cityCoords[trip.destination]?.[1] || 0 }
-  const from = `${anchor.longitude},${anchor.latitude},${encodeURIComponent(anchor.name)}`
-  const to = `${hotel.longitude},${hotel.latitude},${encodeURIComponent(hotel.name)}`
-  window.open(`https://uri.amap.com/navigation?from=${from}&to=${to}&mode=car&policy=1&src=travelmind&coordinate=gaode&callnative=0`, '_blank', 'noreferrer')
+  window.open(amapNavigationUrl(anchor, hotel), '_blank', 'noreferrer')
 }
 
 function hotelImage(hotel: HotelOption) {

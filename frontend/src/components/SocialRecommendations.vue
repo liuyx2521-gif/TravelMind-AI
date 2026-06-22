@@ -29,6 +29,7 @@
 <script setup lang="ts">
 import { onMounted, ref, watch } from 'vue'
 import { http } from '../api'
+import { socialSearchLinks } from '../externalLinks'
 
 type SocialItem = {
   platform: string
@@ -66,12 +67,7 @@ async function load() {
 }
 
 function localFallback(): SocialItem[] {
-  const keyword = encodeURIComponent(`${props.city || ''} ${props.place} 打卡 攻略 美食`.trim())
-  return [
-    { platform: '小红书', type: '搜索入口', title: '小红书图文攻略', url: `https://www.xiaohongshu.com/search_result?keyword=${keyword}`, summary: '' },
-    { platform: '抖音', type: '搜索入口', title: '抖音视频/探店', url: `https://www.douyin.com/search/${keyword}`, summary: '' },
-    { platform: '全网', type: '搜索入口', title: '全网旅行攻略', url: `https://www.bing.com/search?q=${keyword}`, summary: '' },
-  ]
+  return socialSearchLinks(`${props.city || ''} ${props.place} 打卡 攻略 美食`)
 }
 
 function platformClass(platform: string) {
