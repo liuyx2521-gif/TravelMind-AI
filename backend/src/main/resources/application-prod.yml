@@ -19,6 +19,7 @@ knife4j:
   enable: false
 
 app:
+  public-base-url: ${APP_PUBLIC_BASE_URL:}
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS}
   jwt:
@@ -31,11 +32,6 @@ app:
     model: ${AI_MODEL:deepseek-chat}
     local-base-url: ${AI_LOCAL_BASE_URL:http://localhost:11434}
     local-model: ${AI_LOCAL_MODEL:qwen2.5:3b-instruct}
-  minio:
-    endpoint: ${MINIO_ENDPOINT}
-    public-url: ${MINIO_PUBLIC_URL}
-    access-key: ${MINIO_ACCESS_KEY}
-    secret-key: ${MINIO_SECRET_KEY}
   amap:
     key: ${AMAP_WEB_KEY}
   upload:

@@ -73,6 +73,30 @@ public class AiService {
     public record RecommendReq(String city, BigDecimal budget, Integer days, String preference, String peopleType) {
     }
 
+    public record StructuredPlan(
+            String title,
+            String origin,
+            String destination,
+            Integer days,
+            BigDecimal totalBudget,
+            List<PlanDay> dayPlans,
+            List<BudgetLine> budgetLines,
+            List<HotelSuggestion> hotels,
+            List<String> tips) {
+    }
+
+    public record PlanDay(Integer day, String theme, List<PlanNode> nodes) {
+    }
+
+    public record PlanNode(String type, String icon, String title, String time, String summary, String detail) {
+    }
+
+    public record BudgetLine(String category, BigDecimal amount, String note) {
+    }
+
+    public record HotelSuggestion(String name, String area, BigDecimal estimatedPrice, String reason) {
+    }
+
     public AiConfig config() {
         return new AiConfig(provider, baseUrl, model, isOllama(), hasApiKey());
     }
@@ -113,6 +137,53 @@ public class AiService {
                 输出 Markdown，内容简洁可执行。
                 """.formatted(req.origin(), req.destination(), req.budget(), req.days(), req.preference());
         return ask(prompt(userInput, travelSearchService.context(userInput)));
+    }
+
+    public StructuredPlan structuredPlan(PlanReq req) {
+        var userInput = """
+                你是 TravelMind AI 旅行规划师。请只返回 JSON，不要 Markdown，不要代码块。
+                JSON 字段必须为：
+                {
+                  "title": "杭州到三亚3日游",
+                  "origin": "出发地",
+                  "destination": "目的地",
+                  "days": 3,
+                  "totalBudget": 3000,
+                  "dayPlans": [
+                    {
+                      "day": 1,
+                      "theme": "抵达与轻松适应",
+                      "nodes": [
+                        {"type":"transport","icon":"plane","title":"航班抵达","time":"上午","summary":"抵达目的地","detail":"完整建议、预约方式、避坑提醒"},
+                        {"type":"attraction","icon":"beach","title":"景点","time":"下午","summary":"简短说明","detail":"完整建议、预约方式、避坑提醒"},
+                        {"type":"food","icon":"bowl","title":"美食","time":"晚上","summary":"简短说明","detail":"完整建议、预约方式、避坑提醒"},
+                        {"type":"hotel","icon":"hotel","title":"住宿","time":"夜间","summary":"简短说明","detail":"完整建议、预约方式、避坑提醒"}
+                      ]
+                    }
+                  ],
+                  "budgetLines": [
+                    {"category":"交通","amount":1000,"note":"往返大交通估算"},
+                    {"category":"酒店","amount":900,"note":"按入住晚数估算"}
+                  ],
+                  "hotels": [
+                    {"name":"酒店名称","area":"所在区域","estimatedPrice":450,"reason":"推荐原因"}
+                  ],
+                  "tips": ["需要提前预约的事项"]
+                }
+                要求：
+                - dayPlans 数量必须等于天数，每天 3-5 个节点。
+                - 金额使用人民币数字，totalBudget 等于 budgetLines 合计。
+                - 内容基于真实可查询地点，不编造不存在的景点或酒店。
+                - 如目的地只是偏好，请先选择一个最合适目的地。
+
+                出发地：%s
+                目的地/偏好：%s
+                预算：%s 元
+                天数：%s 天
+                偏好：%s
+                """.formatted(req.origin(), req.destination(), req.budget(), req.days(), req.preference());
+        var answer = ask(prompt(userInput, travelSearchService.context(userInput)));
+        return parseStructuredPlan(answer, req);
     }
 
     public String budget(BudgetReq req) {
@@ -184,6 +255,63 @@ public class AiService {
                 .filter(text -> !text.isBlank())
                 .onErrorResume(WebClientResponseException.Unauthorized.class,
                         e -> typewriter(askLocalFallback(prompt, "DeepSeek 认证失败，已自动切换到本地免费模型。")));
+    }
+
+    private StructuredPlan parseStructuredPlan(String answer, PlanReq req) {
+        try {
+            return objectMapper.readValue(extractJson(answer), StructuredPlan.class);
+        } catch (Exception ignored) {
+            return fallbackStructuredPlan(req);
+        }
+    }
+
+    private String extractJson(String text) {
+        if (text == null || text.isBlank()) return "{}";
+        var cleaned = text.replace("```json", "").replace("```", "").trim();
+        var start = cleaned.indexOf('{');
+        var end = cleaned.lastIndexOf('}');
+        return start >= 0 && end > start ? cleaned.substring(start, end + 1) : cleaned;
+    }
+
+    private StructuredPlan fallbackStructuredPlan(PlanReq req) {
+        var budget = req.budget() == null ? BigDecimal.valueOf(3000) : req.budget();
+        var days = req.days() == null || req.days() < 1 ? 3 : req.days();
+        var destination = blankToDefault(req.destination(), "推荐目的地");
+        var dayPlans = new ArrayList<PlanDay>();
+        for (var day = 1; day <= days; day++) {
+            dayPlans.add(new PlanDay(day, "第 " + day + " 天行程", List.of(
+                    new PlanNode("transport", "subway", "城市交通", "上午", "前往当天主要区域", "根据酒店位置选择地铁、公交或打车，预留换乘和排队时间。"),
+                    new PlanNode("attraction", "landmark", destination + "精选景点", "下午", "游览核心景点", "优先选择评分高、交通便利的真实景点，热门日期建议提前预约。"),
+                    new PlanNode("food", "bowl", "当地美食", "傍晚", "安排特色餐食", "选择距离景点或酒店较近的餐厅，减少绕路和等待。"),
+                    new PlanNode("hotel", "hotel", "返回酒店", "夜间", "休息调整", "确认次日交通时间，准备证件、充电设备和随身物品。")
+            )));
+        }
+        var transport = budget.multiply(BigDecimal.valueOf(0.30));
+        var hotel = budget.multiply(BigDecimal.valueOf(0.35));
+        var food = budget.multiply(BigDecimal.valueOf(0.18));
+        var attraction = budget.multiply(BigDecimal.valueOf(0.10));
+        var other = budget.subtract(transport).subtract(hotel).subtract(food).subtract(attraction);
+        return new StructuredPlan(
+                blankToDefault(req.origin(), "出发地") + "到" + destination + days + "日游",
+                blankToDefault(req.origin(), "出发地"),
+                destination,
+                days,
+                budget,
+                dayPlans,
+                List.of(
+                        new BudgetLine("交通", transport, "往返大交通与市内交通估算"),
+                        new BudgetLine("酒店", hotel, "按入住晚数和舒适型住宿估算"),
+                        new BudgetLine("餐饮", food, "按当地特色餐食和日常用餐估算"),
+                        new BudgetLine("景点", attraction, "门票和体验项目估算"),
+                        new BudgetLine("机动", other.max(BigDecimal.ZERO), "购物、保险和临时支出")
+                ),
+                List.of(new HotelSuggestion("目的地核心商圈酒店", "交通便利区域", hotel.divide(BigDecimal.valueOf(Math.max(days - 1, 1)), 0, java.math.RoundingMode.HALF_UP), "方便衔接景点、餐饮和公共交通")),
+                List.of("热门景点和酒店价格会随日期波动，出发前建议再次确认。")
+        );
+    }
+
+    private String blankToDefault(String value, String fallback) {
+        return value == null || value.isBlank() ? fallback : value.trim();
     }
 
     private String ask(String prompt) {

@@ -208,6 +208,7 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { storeToRefs } from 'pinia'
 import { useRouter } from 'vue-router'
 import * as echarts from 'echarts'
 import { useMessage } from 'naive-ui'
@@ -218,7 +219,8 @@ import { poiLatitude, poiLongitude, poiPhoto, staticMap, type AmapPoi } from '..
 import { realAttractionImage } from '../realAttractionImages'
 import { fallbackPlaceImage } from '../imageFallback'
 import { saveOnlineAttraction } from '../onlineDetail'
-import { seasonalAttractionKeyword, seasonalAttractionQueries, seasonalAttractionTip } from '../seasonalTravel'
+import { seasonalAttractionKeyword, seasonalAttractionQueries } from '../seasonalTravel'
+import { useChatStore, type ChatMessage } from '../stores/chat'
 import { useThemeStore } from '../stores/theme'
 import { useUserStore } from '../stores/user'
 
@@ -226,18 +228,16 @@ const toast = useMessage()
 const router = useRouter()
 const theme = useThemeStore()
 const user = useUserStore()
+const chat = useChatStore()
+const { conversationId, conversations, messages } = storeToRefs(chat)
 const message = ref('我在杭州，预算3000元，想去海边玩3天，喜欢美食和拍照')
 const loading = ref(false)
 const chartRef = ref<HTMLDivElement>()
 const chatBody = ref<HTMLDivElement>()
 const seasonal = ref<Attraction[]>([])
-const seasonalTip = seasonalAttractionTip()
-const conversationId = ref<number>()
-const conversations = ref<AiConversation[]>([])
 const deletingConversationId = ref<number>()
 const socialVisible = ref(false)
 const showExamples = ref(true)
-const messages = ref<ChatMessage[]>(defaultMessages())
 const examples = [
   '上海去成都玩4天，预算4000，喜欢美食和夜景',
   '北京出发，想看雪景，玩5天，预算6000',
@@ -249,17 +249,6 @@ const knownCities = [
   '沈阳', '大连', '昆明', '贵阳', '拉萨', '乌鲁木齐', '呼伦贝尔', '张家界', '香港', '澳门', '东京',
   '大阪', '京都', '首尔', '曼谷', '新加坡', '巴黎', '伦敦', '罗马', '纽约', '洛杉矶',
 ]
-
-type ChatMessage = {
-  id: string
-  role: 'user' | 'assistant'
-  content: string
-}
-
-type ChatResp = {
-  conversationId: number
-  answer: string
-}
 
 type BudgetItem = {
   name: string
@@ -274,7 +263,6 @@ type BudgetPlan = {
 
 let budgetChart: echarts.ECharts | undefined
 let resizeObserver: ResizeObserver | undefined
-let restoringChat = false
 const selectedBudgetIndex = ref(0)
 const budgetPlans = ref<BudgetPlan[]>([fallbackBudgetPlan(3000, '默认方案')])
 const activeBudget = computed(() => budgetPlans.value[selectedBudgetIndex.value] || budgetPlans.value[0])
@@ -365,22 +353,20 @@ function goOnlineAttraction(item: Attraction) {
 }
 
 function newChat() {
-  conversationId.value = undefined
   message.value = ''
-  messages.value = defaultMessages('新会话已开始。')
+  chat.newChat('新会话已开始。')
   setBudgetPlans([fallbackBudgetPlan(3000, '默认方案')])
-  saveChatCache()
 }
 
 async function loadConversations() {
   if (!user.token) {
-    conversations.value = []
+    chat.setConversations([])
     return
   }
   try {
-    conversations.value = await http.get<AiConversation[]>('/api/ai/conversations')
+    chat.setConversations(await http.get<AiConversation[]>('/api/ai/conversations'))
   } catch {
-    conversations.value = []
+    chat.setConversations([])
   }
 }
 
@@ -388,7 +374,7 @@ async function deleteConversation(id: number) {
   deletingConversationId.value = id
   try {
     await http.delete(`/api/ai/conversations/${id}`)
-    conversations.value = conversations.value.filter(item => item.id !== id)
+    chat.removeConversation(id)
     if (conversationId.value === id) newChat()
     toast.success('已删除')
   } catch (e) {
@@ -422,11 +408,11 @@ async function streamChat(aiMessage: string, assistant: ChatMessage) {
     const blocks = buffer.split(/\r?\n\r?\n/)
     buffer = blocks.pop() || ''
     for (const block of blocks) handleStreamBlock(block, assistant)
-    saveChatCache()
+    chat.saveCache()
     await scrollBottom()
   }
   if (buffer.trim()) handleStreamBlock(buffer, assistant)
-  saveChatCache()
+  chat.saveCache()
   if (!assistant.content.trim()) throw new Error('AI 暂未返回内容')
 }
 
@@ -440,7 +426,7 @@ function handleStreamBlock(block: string, assistant: ChatMessage) {
   const text = data.join('\n')
   if (!text) return
   if (event === 'meta') {
-    conversationId.value = Number(text)
+    chat.setConversationId(Number(text))
     return
   }
   if (event === 'error') throw new Error(text)
@@ -451,11 +437,10 @@ async function openConversation(id: number) {
   if (loading.value || conversationId.value === id) return
   try {
     const rows = await http.get<AiMessage[]>(`/api/ai/conversations/${id}/messages`)
-    conversationId.value = id
-    messages.value = rows
+    chat.setConversationId(id)
+    chat.setMessages(rows
       .filter(item => item.role === 'user' || item.role === 'assistant')
-      .map(item => ({ id: String(item.id), role: item.role as 'user' | 'assistant', content: item.content }))
-    if (!messages.value.length) messages.value = defaultMessages()
+      .map(item => ({ id: String(item.id), role: item.role as 'user' | 'assistant', content: item.content })))
     const latestAssistant = [...messages.value].reverse().find(item => item.role === 'assistant')?.content
     setBudgetPlans(latestAssistant ? parseBudgetPlans(latestAssistant) : [fallbackBudgetPlan(3000, '默认方案')])
     await scrollBottom()
@@ -671,12 +656,12 @@ function renderBudgetChart() {
 }
 
 watch(messages, () => {
-  saveChatCache()
+  chat.saveCache()
   scrollBottom()
 }, { deep: true })
 
 watch(conversationId, () => {
-  saveChatCache()
+  chat.saveCache()
 })
 
 watch(weatherCity, city => {
@@ -687,7 +672,7 @@ watch(weatherCity, city => {
 onMounted(async () => {
   if (user.token && !user.user) await user.fetchMe()
   await loadConversations()
-  await restoreChatCache()
+  await restoreChat()
   await scrollBottom()
   await loadWeather(weatherCity.value)
   seasonal.value = await loadOnlineSeasonalAttractions()
@@ -700,72 +685,25 @@ onMounted(async () => {
   }
 })
 
-watch(() => chatOwnerKey(), async () => {
+watch(() => chat.ownerKey(), async () => {
   await loadConversations()
-  await restoreChatCache()
+  await restoreChat()
 })
 
-function defaultMessages(content = '你好，我是 TravelMind AI。') {
-  return [{ id: crypto.randomUUID(), role: 'assistant' as const, content }]
-}
-
-function chatOwnerKey() {
-  if (!user.token) return 'guest'
-  return user.user?.id ? `user-${user.user.id}` : `token-${jwtSubject(user.token)}`
-}
-
-function chatStorageKey() {
-  return `travelmind-chat-${chatOwnerKey()}`
-}
-
-function chatFallbackStorageKeys() {
-  const keys = [chatStorageKey()]
-  if (user.token) keys.push(`travelmind-chat-token-${jwtSubject(user.token)}`)
-  return [...new Set(keys)]
-}
-
-function saveChatCache() {
-  if (restoringChat) return
-  const value = JSON.stringify({ conversationId: conversationId.value, messages: messages.value })
-  chatFallbackStorageKeys().forEach(key => localStorage.setItem(key, value))
-}
-
-async function restoreChatCache() {
-  restoringChat = true
-  for (const key of chatFallbackStorageKeys()) {
-    const cache = localStorage.getItem(key)
-    if (!cache) continue
-    try {
-      const data = JSON.parse(cache)
-      if (Array.isArray(data.messages) && data.messages.length) {
-        messages.value = data.messages
-        conversationId.value = data.conversationId
-        const latestAssistant = [...messages.value].reverse().find(item => item.role === 'assistant')?.content
-        if (latestAssistant) setBudgetPlans(parseBudgetPlans(latestAssistant))
-        restoringChat = false
-        saveChatCache()
-        return
-      }
-    } catch {}
-  }
-  if (user.token && conversations.value.length) {
-    restoringChat = false
-    await openConversation(conversations.value[0].id)
-    saveChatCache()
+async function restoreChat() {
+  const restored = chat.restoreCache()
+  if (restored) {
+    const latestAssistant = [...messages.value].reverse().find(item => item.role === 'assistant')?.content
+    if (latestAssistant) setBudgetPlans(parseBudgetPlans(latestAssistant))
+    chat.saveCache()
     return
   }
-  conversationId.value = undefined
-  messages.value = defaultMessages()
-  setBudgetPlans([fallbackBudgetPlan(3000, '默认方案')])
-  restoringChat = false
-}
-
-function jwtSubject(token: string) {
-  try {
-    return JSON.parse(atob(token.split('.')[1] || '')).sub || token.slice(-12)
-  } catch {
-    return token.slice(-12)
+  if (user.token && conversations.value.length) {
+    await openConversation(conversations.value[0].id)
+    chat.saveCache()
+    return
   }
+  setBudgetPlans([fallbackBudgetPlan(3000, '默认方案')])
 }
 
 onBeforeUnmount(() => {
@@ -836,7 +774,7 @@ async function searchAmapPoi(keyword: string, city: string, pageSize: number) {
   })
   return result.map((poi, index) => ({
     id: Number(`${Date.now()}${index}`),
-    name: poi.name,
+    name: poi.name || `${poi.cityname || city || '目的地'}景点`,
     city: poi.cityname || city,
     province: poi.pname || '',
     description: poi.address || poi.type || '高德实时景点',

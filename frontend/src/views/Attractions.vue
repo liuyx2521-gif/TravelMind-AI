@@ -158,7 +158,7 @@ async function searchOnlineByJs(searchKeyword = keyword.value || seasonalAttract
   const result = sortTravelPois(groups.flatMap(group => group.status === 'fulfilled' ? group.value : [])).slice(0, 48)
   return result.map((poi, index) => ({
     id: attractionPoiStableId(poi, index, poi.cityname || searchCity || city.value),
-    name: poi.name,
+    name: poi.name || `${poi.cityname || searchCity || city.value || '目的地'}景点`,
     city: poi.cityname || searchCity || '',
     province: poi.pname || '',
     description: poi.address || poi.type || '高德实时景点',

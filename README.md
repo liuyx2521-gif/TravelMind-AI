@@ -90,9 +90,8 @@ JWT_SECRET=change_to_a_random_32_chars_secret
 CORS_ALLOWED_ORIGINS=https://你的-vercel-域名.vercel.app
 AI_API_KEY=你的 DeepSeek Key
 AMAP_WEB_KEY=你的高德 Web 服务 Key
-MINIO_ACCESS_KEY=change_me
-MINIO_SECRET_KEY=change_me_至少8位
-MINIO_PUBLIC_URL=https://你的后端域名
+APP_PUBLIC_BASE_URL=https://你的后端域名
+UPLOAD_DIR=/opt/travelmind/uploads
 ```
 
 4. 启动后端服务：
@@ -110,7 +109,7 @@ VITE_AMAP_KEY=你的高德 JS Key
 VITE_AMAP_SECURITY_CODE=你的高德安全密钥
 ```
 
-阿里云安全组建议只开放 `80`、`443`、`22`，MySQL、Redis、MinIO 不直接暴露公网。
+阿里云安全组建议只开放 `80`、`443`、`22`，MySQL、Redis 不直接暴露公网。
 
 ## 免费 AI 接入
 

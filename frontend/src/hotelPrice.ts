@@ -4,6 +4,7 @@ import { ctripHotelUrl, fliggyHotelUrl, placeKeyword } from './externalLinks'
 export { ctripHotelUrl, fliggyHotelUrl }
 
 type HotelLike = Pick<Hotel, 'name' | 'city' | 'price'>
+type HotelPriceSource = Pick<HotelLike, 'name' | 'city'> & { price?: unknown }
 
 export function hotelBookingUrl(item: Pick<HotelLike, 'name' | 'city'>, fallbackCity = '') {
   return ctripHotelUrl(item, fallbackCity)
@@ -17,7 +18,7 @@ export function hotelPriceText(item: HotelLike, fallbackCity = '', index = 0) {
   return `¥${normalizeHotelPrice(item.price, item, fallbackCity, index)}`
 }
 
-export function normalizeHotelPrice(price: unknown, item: Pick<HotelLike, 'name' | 'city'>, fallbackCity = '', index = 0) {
+export function normalizeHotelPrice(price: unknown, item: HotelPriceSource, fallbackCity = '', index = 0) {
   const value = Math.round(Number(price || 0))
   if (value > 0) return value
 

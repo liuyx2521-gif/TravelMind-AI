@@ -16,9 +16,12 @@ import java.util.UUID;
 @RequestMapping("/api/files")
 public class FileController {
     private final Path uploadDir;
+    private final String publicBaseUrl;
 
-    public FileController(@Value("${app.upload.dir:uploads}") String uploadDir) {
+    public FileController(@Value("${app.upload.dir:uploads}") String uploadDir,
+                          @Value("${app.public-base-url:}") String publicBaseUrl) {
         this.uploadDir = Path.of(uploadDir).toAbsolutePath().normalize();
+        this.publicBaseUrl = publicBaseUrl == null ? "" : publicBaseUrl.replaceAll("/+$", "");
     }
 
     @PostMapping("/upload")
@@ -37,8 +40,23 @@ public class FileController {
         Files.createDirectories(target.getParent());
         file.transferTo(target);
 
-        var baseUrl = request.getScheme() + "://" + request.getServerName() + ":" + request.getServerPort();
+        var baseUrl = baseUrl(request);
         var url = baseUrl + "/uploads/" + bucket + "/" + objectName.replace("\\", "/");
         return Result.ok(Map.of("url", url, "objectName", objectName));
+    }
+
+    private String baseUrl(HttpServletRequest request) {
+        if (!publicBaseUrl.isBlank()) return publicBaseUrl;
+        var proto = header(request, "X-Forwarded-Proto", request.getScheme());
+        var host = header(request, "X-Forwarded-Host", request.getHeader("Host"));
+        if (host != null && !host.isBlank()) return proto + "://" + host;
+        var port = request.getServerPort();
+        var defaultPort = ("https".equalsIgnoreCase(proto) && port == 443) || ("http".equalsIgnoreCase(proto) && port == 80);
+        return proto + "://" + request.getServerName() + (defaultPort ? "" : ":" + port);
+    }
+
+    private String header(HttpServletRequest request, String name, String fallback) {
+        var value = request.getHeader(name);
+        return value == null || value.isBlank() ? fallback : value.split(",", 2)[0].trim();
     }
 }

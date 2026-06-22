@@ -137,3 +137,43 @@ export type AiMessage = {
   content: string
   createTime?: string
 }
+
+export type StructuredPlan = {
+  title: string
+  origin: string
+  destination: string
+  days: number
+  totalBudget: number
+  dayPlans: PlanDay[]
+  budgetLines: BudgetLine[]
+  hotels: HotelSuggestion[]
+  tips: string[]
+}
+
+export type PlanDay = {
+  day: number
+  theme: string
+  nodes: PlanNode[]
+}
+
+export type PlanNode = {
+  type: 'transport' | 'attraction' | 'food' | 'hotel' | string
+  icon: string
+  title: string
+  time: string
+  summary: string
+  detail: string
+}
+
+export type BudgetLine = {
+  category: string
+  amount: number
+  note: string
+}
+
+export type HotelSuggestion = {
+  name: string
+  area: string
+  estimatedPrice: number
+  reason: string
+}

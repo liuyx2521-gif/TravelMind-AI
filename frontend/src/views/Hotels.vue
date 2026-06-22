@@ -111,10 +111,10 @@ async function searchOnlineByJs(): Promise<Hotel[]> {
   const result = sortRegularHotelPois(results.flatMap(item => item.status === 'fulfilled' ? item.value : [])).slice(0, 48)
   return result.map((poi, index) => ({
     id: hotelPoiStableId(poi, index, city.value),
-    name: poi.name,
+    name: poi.name || `${poi.cityname || city.value || '目的地'}酒店`,
     city: poi.cityname || city.value || '',
     address: poi.address || poi.type || '',
-    price: normalizeHotelPrice(poi.biz_ext?.cost, { name: poi.name, city: poi.cityname || city.value || '', price: 0 }, city.value, index),
+    price: normalizeHotelPrice(poi.biz_ext?.cost, { name: poi.name || '', city: poi.cityname || city.value || '', price: 0 }, city.value, index),
     score: Number(poi.biz_ext?.rating || 0),
     cover: poiPhoto(poi) || staticMap(poi.location, key),
     longitude: poiLongitude(poi.location),

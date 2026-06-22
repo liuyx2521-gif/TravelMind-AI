@@ -65,6 +65,12 @@ public class AiController {
         return Result.ok(aiService.plan(req));
     }
 
+    @PostMapping("/plan/structured")
+    public Result<AiService.StructuredPlan> structuredPlan(@RequestBody AiService.PlanReq req) {
+        rateLimitService.check("ai", 12, Duration.ofMinutes(1));
+        return Result.ok(aiService.structuredPlan(req));
+    }
+
     @PostMapping("/budget")
     public Result<String> budget(@RequestBody AiService.BudgetReq req) {
         rateLimitService.check("ai", 12, Duration.ofMinutes(1));

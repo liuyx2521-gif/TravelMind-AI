@@ -30,17 +30,6 @@ services:
       timeout: 5s
       retries: 10
 
-  minio:
-    image: minio/minio:latest
-    container_name: travelmind-minio
-    restart: unless-stopped
-    command: server /data --console-address ":9001"
-    environment:
-      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY}
-      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY}
-    volumes:
-      - minio-data:/data
-
   backend:
     build: ../backend
     container_name: travelmind-backend
@@ -50,15 +39,12 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-      minio:
-        condition: service_started
     env_file:
       - ../backend/.env
     environment:
       SPRING_PROFILES_ACTIVE: prod
       MYSQL_HOST: mysql
       REDIS_HOST: redis
-      MINIO_ENDPOINT: http://minio:9000
     expose:
       - "8081"
     volumes:
@@ -80,5 +66,4 @@ services:
 volumes:
   mysql-data:
   redis-data:
-  minio-data:
   uploads-data:

@@ -20,7 +20,7 @@ export function ctripHotelUrl(item: PlaceLike, fallbackCity = '') {
   return `https://hotels.ctrip.com/hotels/list?keyword=${encodeURIComponent(placeKeyword(item, fallbackCity))}`
 }
 
-export function fliggyHotelUrl() {
+export function fliggyHotelUrl(_item?: PlaceLike, _fallbackCity = '') {
   return 'https://www.fliggy.com/'
 }
 
